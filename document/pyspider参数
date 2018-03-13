@@ -1,0 +1,227 @@
+一、pyspider框架
+(1)安装
+pip3 install pyspider
+(2)启动
+#pyspider
+注意：pyspider命令默认会以all模式运行所有的组件，方便调试。作者建议在线上模式分开部署各各组件，详情请查看部署章节
+运行成功后用浏览器打开http://localhost:5000/访问控制台
+（3）自带代码剖析
+#!/usr/bin/env python
+# -*- encoding: utf-8 -*-
+# Created on 2015-10-08 12:45:44
+# Project: test
+
+from pyspider.libs.base_handler import *
+class Handler(BaseHandler):
+    crawl_config = {
+    }
+
+    @every(minutes=24 * 60)
+    def on_start(self):
+        self.crawl('http://scrapy.org/', callback=self.index_page)
+
+    @config(age=10 * 24 * 60 * 60)
+    def index_page(self, response):
+        for each in response.doc('a[href^="http"]').items():
+            self.crawl(each.attr.href, callback=self.detail_page)
+
+    @config(priority=2)
+    def detail_page(self, response):
+        return {
+            "url": response.url,
+            "title": response.doc('title').text(),
+        }
+代码简单分析：
+def on_start(self) 方法是入口代码。当在web控制台点击run按钮时会执行此方法。
+self.crawl(url, callback=self.index_page)这个方法是调用API生成一个新的爬取任务，这个任务被添加到待抓取队列。
+def index_page(self, response) 这个方法获取一个Response对象。 response.doc是pyquery对象的一个扩展方法。pyquery是一个类似于jQuery的对象选择器。
+def detail_page(self, response)返回一个结果集对象。这个结果默认会被添加到resultdb数据库（如果启动时没有指定数据库默认调用sqlite数据库）。你也可以重写on_result(self,result)方法来指定保存位置。
+更多知识：
+@every(minutes=24*60, seconds=0) 这个设置是告诉scheduler（调度器）on_start方法每天执行一次。
+@config(age=10 * 24 * 60 * 60) 这个设置告诉scheduler（调度器）这个request（请求）过期时间是10天，10天内再遇到这个请求直接忽略。这个参数也可以在self.crawl(url, age=10*24*60*60) 和 crawl_config中设置。
+@config(priority=2) 这个是优先级设置。数字越大越先执行
+（4）执行任务
+a.当完成脚本编写，调试无误后，请先保存你的脚本，然后返回到控制台首页。
+b.直接点击status那栏，把状态由ToDO改成debug或running。
+c.最后点击项目最右边那个run按钮启动项目。
+d.当progress那栏有数据显示说明启动成功。到现在就可以点最右侧的results查看结果了。
+（5）self.crawl(url,**kwargs)
+参数:
+url需要被抓取的url或url列表．
+callback这个参数用来指定爬取内容后需要哪个方法来处理内容．一般解析为 response. _default: __call__ _　如下面调用方法：
+def on_start(self): 
+    self.crawl('http://scrapy.org/', callback=self.index_page)
+self.crawl还有以下可选参数
+age本参数用来指定任务的有效期，在有效期内不会重复抓取．默认值是-1（永远不过期，意思是只抓一次）
+@config(age=10 * 24 * 60 * 60) 
+    def index_page(self, response): 
+        ...
+  解析：每一个回调index_page的任务有效期是10天，在10天之内再遇到这个任务都会被忽略掉（除非有强制抓取参数才不会忽略）
+  priority这个参数用来指定任务的优先级，数值越大越先被执行．默认值为0．
+def index_page(self): 
+    self.crawl('http://www.example.org/page2.html', callback=self.index_page)
+self.crawl('http://www.example.org/233.html', callback=self.detail_page,priority=1)
+  exetime 多长时间后开始爬取，默认值为0，立即执行
+import time def on_start(self):
+self.crawl('http://www.example.org/', callback=self.callback,exetime=time.time()+30*60)
+解析：30分钟后开始爬取
+retries 任务执行失败后重试次数. default: 3
+itag任务标记值，此标记会在抓取时对比，如果这个值发生改变，不管有效期有没有到都会重新抓取新内容．多数用来动态判断内容是否修改或强制重爬．默认值是：None.
+def index_page(self, response):  
+    for item in response.doc('.item').items():
+        self.crawl(item.find('a').attr.url, callback=self.detail_page, itag=item.find('.update-time').text())
+本实例中使用页面中update-time元素的值当成itag来判断内容是否有更新．
+class Handler(BaseHandler): 
+crawl_config = { 'itag': 'v223' }
+修改全局参数itag，使所有任务都重新执行（需要点run按钮来启动任务）
+auto_recrawl 当为真时，每天重新爬取
+def on_start(self): 
+self.crawl('http://www.example.org/', callback=self.callback,age=5*60*60, auto_recrawl=True)
+method HTTP请求方法设置，默认值: GET
+params把一个字典参数附加到url参数里，如 ：
+def on_start(self): 
+    self.crawl('http://httpbin.org/get', callback=self.callback,params={'a': 123, 'b': 'c'})
+self.crawl('http://httpbin.org/get?a=123&b=c', callback=self.callback)
+解析：这两个是相同的任务
+data这个参数会附加到ＵＲＬ请求的body里，如果是字典会经过form-encoding编码再附加.
+def on_start(self): 
+    self.crawl('http://httpbin.org/post', callback=self.callback,method='POST', data={'a': 123, 'b': 'c'})
+files dictionary of {field: {filename: 'content'}} files to multipart upload.`
+headers自定义请求头（字典类型）．
+cookies自定义请求的cookies（字典类型）．
+connect_timeout指定请求时链接超时时间,单位秒，默认值：20.
+timeout请求内容里最大等待秒数．默认值：120．
+allow_redirects遇到30x状态码时是否重新请求跟随．默认是：True.
+validate_cert遇到HTTPS类型的URL时是否验证证书，默认值：True.
+proxy设置代理服务器，格式如 username:password@hostname:port .暂时只支持http代理
+class Handler(BaseHandler): 
+    crawl_config = { 'proxy': 'localhost:8080' }
+Handler.crawl_config里配置proxy参数会对整个项目生效，本项目的所有任务都会使用代理爬取．
+taskid唯一性的taskid用来区别不同的任务．默认taskid是由URL经过md5计算得出．你也可以使用def get_taskid(self, task)方法覆盖系统自带的来自定义任务id.如：
+import json from pyspider.libs.utils 
+import md5string 
+def get_taskid(self, task): 
+return md5string(task['url']+json.dumps(task['fetch'].get('data', '')))
+（6）Response
+Response对象的方法及成员参考
+Response.url 返回最后的URL地址.
+Response.text请求响应的文本格式内容 
+如果Response.encoding 是 None 或 chardet 模块可用, 响应内容会自动被解析为指定的编码.
+Response.content请求响应的二进制格式内容，未做编码解析
+Response.doc本方法会调用PyQuery库用返回的内容生成一个PyQuery对象以方便使用，生成对象时默认已经把里面的所有链接格式化成绝对链接，可直接分析使用．
+Response.etree本方法会调用lxml库用返回的内容生成一个lxml对象以方便使用．
+Response.json本方法会调用JSON相关库来解析返回的内容.
+Response.status_code
+Response.orig_url
+If there is any redirection during the request, here is the url you just submit via self.crawl.
+Response.headers请求响应的头信息，dict格式
+Response.cookies
+Response.errorfetch的报错信息
+Response.time抓取使用的时间
+Response.ok如果状态码是200并且没有错误信息这个值就是True.用来判断是否请求成功．
+Response.encoding
+Encoding of Response.content.
+If Response.encoding is None, encoding will be guessed by header or content or chardet(if available).
+Set encoding of content manually will overwrite the guessed encoding.
+Response.save
+The object saved by self.crawl API
+Response.js_script_result
+content returned by JS script
+Response.raise_for_status()
+Raise HTTPError if status code is not 200 or Response.error exists.
+
+（7）项目
+大多数情况下，一个项目就是你针对一个网站写的一个爬虫脚本．
+项目是相对独立的但是你可以导入其它项目或其它项目的模块．
+项目有五个状态:TODO,STOP,CHECKING,DEBUG,RUNNING
+TODO- 当一个脚本刚刚被创建时的状态
+STOP- 你可以设置项目状态为STOP让项目停止运行
+CHECKING- 当一个运行中的项目被编辑时项目状态会被自动设置成此状态并停止运行．
+DEBUG/RUNNING- 这两状态都会运行爬虫，但是他们之间是有区别的．一般来说调试阶段用DEBUG状态，线上用RUNNING状态．
+爬虫的抓取速度根据网上流行的token-bucket来控制.
+rate- 每秒执行多少个请求．
+burst- 设置并发数,如：rate/burst = 0.1/3,这个的意思是爬虫10秒爬一个页面．但是开始时前三个任务会同时时行，不会等10秒，第四个任务爬取前会等10秒． 
+项目删除：把group设置成delete并把项目状态设置成STOP，２４小时后系统会自动删除此项目．
+
+（8）任务
+什么是任务
+       任务是调度器调度的最基本单元
+任务属性
+一个任务有唯一的任务ID叫taskid(默认是：md5(url),不过可以重写get_taskid(self,task)方法指定自己项目生成taskid方法。)
+不同项目之间任务不冲突。
+任务的四个状态:
+	active（运行）
+	failed（失败）
+	success（成功）
+	bad - （暂时没用着）
+只有当任务状态为运行（active）时才会被调度。
+根据优先级执行任务．
+Schedule（调度器）
+	当遇到一个新任务（之前没有遇到过的链接）时：
+	如果设置了exetime并且还没到时间，任务会被添加到等待队列.否则会接受添加到执行队列
+	当任务已经在队列中:
+	如果没有设置force_update就会忽略
+	当遇到一个之前爬过的任务：
+	如果设置了age,并且last_crawl_age+age<now任务会被接受并添加到执行队列，否则被忽略．
+	如果设置了itag且值不等于之前的值会添加到执行队列重新爬取，否则被忽略
+
+（9）环境
+脚本执行环境
+变量
+self.project_name　　项目名
+self.projectinformation 　当前项目信息
+self.response　　响应信息
+self.task　　　任务信息
+关于脚本
+脚本的名称不重要，但是你必需有一个类继承BaseHandler．
+每个方法默认都会传三个参数用来获取相关信息分别是：自身self，请求信息response，项目信息task.如：def callback(self, response, task)
+默认情况下响应代码不等于200的都会被忽略，但是你可以设置@catch_status_code_error参数来改变默认参数
+关于环境
+日志和异常都会被捕获打印输出
+你可以导入其它项目或项目的模块使用
+ＷＥＢ视图：Web view
+在web控制台以浏览器模式显示页面内容
+ＨＴＭＬ视图：HTML view
+在回调函数时显示ＨＴＭＬ代码
+跟踪视图：Follows view
+view the callbacks that can be made from the current callback index_page follows view will show the detail_page callbacks that can be executed.
+消息视图：Messages view
+显示来自 self.send_message API接口的消息.
+ＣＳＳ选择器助力：Enable CSS Selector Helper
+ＣＳＳ选择器助手可以在web视图中通过单击获取节点的css规则，并自动插件到脚本．
+（10）结果
+通常Pyspider在WebUI控制台上查看和下载爬取结果非常方便，但这种办法不是在所有的项目中好用．
+结果数据库
+结果数据库resultdb仅针对结果预览，不适合大规模存储。如果你想从修改抓取的数据保存方式，可以使用数据库API，数据库API可以帮助你连接并查询数据．
+from pyspider
+.database import connect_database
+resultdb = connect_database("<your resutldb connection url>") for project in resultdb: for result in resultdb.select(project):
+        assert result['taskid']
+        assert result['url']
+        assert result['result']
+result['result']就是你的爬虫脚本爬回来的数据．
+结果保存组件
+在产品环境中，您可能需要把结果发送到您自己系统的接口上以方便第三方程序处理，而不是将其存储到resultdb。强烈建议重写resultworker。
+from pyspider.result import ResultWorker Class MyResultWorker(ResultWorker):
+    def on_result(self, task, result):
+        assert task['taskid']
+        assert task['project']
+        assert task['url']
+        assert result # your processing code goes here 
+result就是你的爬虫脚本爬取的数据.
+你需要把自己的保存结果的脚本（如：my_result_worder.py）保存在pyspider目录，在启动pyspider时添加参数result_worker和--result-cls调用自己的类．如：pyspider result_worker --result-cls=my_result_worder. 这样来启动结果处理类．或修改配置文件，如下：
+{
+  ... "result_worker": { "result_cls": "my_result_worder. MyResultWorker" } ...
+} 
+配置文件使用方法请见： Please refer to Deployment
+设计自己的数据库结构
+默认存储在数据库中的结果被编码为JSON格式不方便分析查看和第三方程序使用，所以强烈建议设计自己的数据库，并重写resultworker。
+提示：
+如果在一个回调或页面上返回多个结果?
+系统默认使用taskid(url)来对任务去重，所以在同一个网页上如果返回多个结果，后边的会把之前的结果覆盖掉．
+有一种解决方案是使用信息接口生成新的taskid来保证同一个页面上的多个数据能被单独保存，如：
+def detail_page(self, response): for li in response.doc('li'):
+        self.send_message(self.project_name, {
+            ...
+        }, url=response.url+"#"+li('a.product-sku').text()) def on_message(self, project, msg): return msg
+

@@ -1,0 +1,1899 @@
+一、Haproxy 负载均衡配置集群配置
+    首先安装HAProxy
+
+    注：负载均衡建议使用多台服务器，达到更高的性能。
+
+    Centos使用
+
+    yum install haproxy -y
+
+    Debian使用
+
+    vi /etc/apt/sources.list
+
+    添加如下内容
+
+    deb http://ftp.us.debian.org/debian/ wheezy-backports main
+
+    然后
+
+    apt-get update apt-get install haproxy
+
+    接下来设置配置文件
+
+    vi /etc/haproxy/haproxy.cfg
+
+    清空配置文件后，输入如下内容
+
+      global
+        log 127.0.0.1   local0
+        log 127.0.0.1   local1 notice
+        #log loghost    local0 info
+        maxconn 4096
+        chroot /var/haproxy
+        uid 99
+        gid 99
+        daemon
+        nbproc  1
+        #debug
+        #quiet
+
+    defaults
+        log global
+        mode    http
+        option  httplog
+        option  dontlognull
+        retries 3
+        option redispatch # 自动重定向到健康机器
+        maxconn 200000
+        timeout check 2000ms # 检查超时
+        timeout connect 5000ms # 连接超时
+        timeout client 50000ms # 客户端连接超时
+        timeout server 50000ms # 服务端连接超时
+
+    #配置客户端
+    listen webinfo :80
+           mode http
+           balance roundrobin
+           stats uri /ha_status
+           option httpclose
+           option forwardfor
+           server web1 127.0.0.1:810 check weight 1 minconn 1 maxconn 200 check inter 40000  #其中一台web服务器
+           server web2 127.0.0.1:811 check weight 1 minconn 1 maxconn 200 check inter 40000  #其中一台web服务器
+           server web4 127.0.0.1:812 check weight 1 minconn 1 maxconn 200 check inter 40000  #其中一台web服务器
+
+    #配置控制台
+    listen stats :6553
+           mode http
+           transparent
+           stats uri / haproxy-stats
+           stats realm Haproxy \ statistic
+           stats auth admin:admin
+           
+二、haproxy监控页面 和页面详细参数
+    stats enable是haproxy通过WEB界面进行统计数据展示的功能，通过WEB界面可以查看到haproxy当前运行状态的一些数据，合理配置的情况下，
+    还可以通过WEB界面调整某个后端服务器的状态，权重，启用或暂停一个后端服务器等。
+
+    stats enable可以出现在default/listen/backend这几个区块中，stats enable这一条命令就可以开启统计功能，开启后下面参数拥有的默认值：
+
+    stats uri : /haproxy?stats
+    stats realm : “HAProxy Statistics”
+    stats auth : no authentication
+    stats scope : no restriction
+
+    尽量不要用默认的值，根据自己的情况，明确指定要使用的值。
+    常用配置：
+
+    编辑haproxy.cfg 加上下面参数
+
+    listen admin_stats
+            stats   enable
+            bind    *:8080    //监听的ip端口号
+            mode    http    //开关
+            option  httplog
+            log     global
+            maxconn 10
+            stats   refresh 30s   //统计页面自动刷新时间
+            stats   uri /admin?stats    //访问的uri   ip:8080/admin
+            stats   realm haproxy
+            stats   auth admin:admin  //认证用户名和密码
+            stats   hide-version   //隐藏HAProxy的版本号
+            stats   admin if TRUE   //管理界面，如果认证成功了，可通过webui管理节点
+
+    保存退出后
+
+    重起service haproxy restart
+
+    然后访问 http://ip:8080/admin?stats 用户名:admin 密码:admin
+
+    注意：访问监控页面是ip+端口号，之前忽略了端口号无法访问
+    
+三、Haproxy的安装、配置
+    Haproxy的介绍、安装、配置
+    1、Haproxy简介
+        Haproxy是一个开源的，高性能的基于HTTP和TCP应用代理的高可用，负载均衡服务软件。它支持双机热备，高可用，负载均衡。有图形界面。
+    而且拥有很好的对服务器节点的健康检查功能。
+    单台的haproxy可以满足每天1-3千万的PV。
+    haproxy为代理，用户的请求和后端的服务器的回应都需要经过haproxy服务器。
+    2、Haproxy的常用算法
+        balance leastconn   最少连接数
+        balance roundrobin   轮循
+        balance static-rr  权重
+        balance source   相当于nginx的ip_hash
+    3、Haproxy的安装
+        centos6.6默认的源yum安装proxy的版本为1.5.4
+    yum 安装haproxy
+    yum install -y haproxy
+    打开内核转发
+    vim /etc/sysctl.conf
+    net.ipv4.ip_forward = 1
+    让上面配置的/etc/sysctl.conf文件生效
+    sysctl -p
+    4、Haproxy配置文件详解
+    Haproxy配置文件可以分为五部分：
+    global : 全局配置参数段，主要用来控制haproxy启动前的进程及系统相关设置。
+    defaults : 配置一些默认参数，如frontend,backend,listen等段末没有设置则使用default段来设置。
+    listen : 监听
+    frontend : 用来匹配接收客户所请求的域名，URL等，并针对不同的匹配，做不同的请求处理。
+    backend : 定义后端服务器集群，以及对后端服务器的一些权重，队列，连接数等的设置
+    下面为正式环境下的haproxy.cfg配置文件
+    cat >> /etc/haproxy/haproxy.cfg <<EOF
+    global
+    log 127.0.0.1:514 local0 error #一定不能用info，这样会造成很大的磁盘IO
+    chroot /var/lib/haproxy
+    pidfile /var/run/haproxy.pid
+    maxconn 20000 #最大连接数
+    user haproxy
+    group haproxy
+    spread-checks 3
+    nbproc 2
+    daemon
+
+    defaults
+    mode http
+    log global
+    retries 3
+    option redispatch
+    #contimeout 5000
+    #clitimeout 50000
+    #srvtimeout 50000
+
+    listen alex
+    bind 192.168.0.29:80 #绑定的IP地址。相当于后面real server的VIP
+    mode http #HTTP模式，也可以作为TCP的反向代理
+    stats hide-version
+    stats enable #开启WEB查看proxy的状态
+    stats uri /admin?stats #查看PROXY状态的URI
+    stats auth proxy:kobe24 #查看PROXY状态时登录录要用到的用户名和密码
+    option httpclose
+    option forwardfor #让后端的real server 的日志可以记录到CLIENT的IP
+    cookie SERVERID insert indirect
+    timeout server 15s
+    timeout connect 15s
+    timeout client 20s
+    #option httpchk HEAD /check.html HTTP/1.0
+    server www01 192.168.0.100:80 cookie A check port 80 inter 5000 fall 5
+    server www02 192.168.0.101:80 cookie B check port 80 inter 5000 fall 5
+    EOF
+
+五、使用haproxy进行会话保持
+    现象说明
+    http出口的负载均衡策略是roundrobin，部分业务系统将会话信息保存在backend server，backend server之间未做同步。
+    用户在访问、操作的时候，会出现会话不连贯的现象 。
+    方案说明
+    haproxy可以使用多种方式做到会话保持，可以在balance中指定均衡算法：
+    balance <algorithm> [ <arguments> ]
+    balance url_param <param> [check_post]
+    source的方式将同一个源IP的请求转发给同一个backend server，可以作用于tcp和http。但是当某个源IP的请求量较大，或者用户请求经过NAT后到达，会导致backend server的负载严重不均衡。不采用。
+    url_param的方式，需要业务在url中带有sessionid，适用于http。不采用。
+    也可以使用stick-tables的方式。stick-table设置复杂，且需要维护记录表。不采用。
+    还可以使用cookie的方式。cookie本身也有多种策略，例如insert，prefix，rewrite等，适用于http。
+    经过对比，决定采用以下方式：
+    cookie cookie.XXXXX.cn insert indirect postonly
+    即：
+    只有遇到post请求的时候，haproxy在响应中设置一个名为
+    `cookie.XXXXX.cn`的cookie，后续带有该cookie的请求到达
+    haproxy时，haproxy将该cookie去除后，转发给cookie指定的backen server。
+    过程说明
+    未发送post请求之前，依然采用roundrobin的方式
+    第一次get请求：
+    第二次get请求:
+    发送了post请求后，被设置cookie
+    cookie的值为处理post请求的backend server的ID。
+    后续请求被转发到同一个backend server
+    用户后续所有http请求，都会带上cookie，被转发到同一个backend server。
+    绑定的backend server宕机后，cookie失效
+    绑定的backend server宕机后，虽然后续发送的请求中依然会带有cookie，但是这时候会重新回到roundrobin的状态，直到用户再次发送POST请求，重新绑定backend server。
+    宕机后，再次发送POST的情形：
+    
+六、HAProxy常用配置介绍，ACL详解
+    一、HAProxy简介
+
+    HAProxy 是一款高性能TCP/HTTP 反向代理负载均衡服务器，具有如下功能：
+
+        根据静态分配的cookies完成HTTP请求转发
+        在多个服务器间实现负载均衡，并且根据HTTP cookies 实现会话粘性
+        主备服务器切换
+        接受访问特定端口实现服务监控
+        实现平滑关闭服务，不中断已建立连接的请求响应，拒绝新的请求
+        在请求或响应HTTP报文中添加，修改，或删除首部信息
+        根据正则规则阻断请求
+        提供带有用户认证机制的服务状态报告页面
+
+        HAProxy特别适用于那些负载特大的web站点，这些站点通常又需要会话保持或七层处理。HAProxy运行在时下的硬件上，完全可以支持数以万计的 并发连接。
+    且它的运行模式使得它可以很简单安全的整合进您当前的架构中， 同时可以保护你的web服务器不被暴露到网络上。
+        HAProxy 实现了一种事件驱动、单一进程模型，此模型支持非常大的并发连接数。多进程或多线程模型受内存限制 、系统调度器限制以及无处不在的锁限制，
+    很少能处理数千并发连接。事件驱动模型因为在有更好的资源和时间管理的用户端(User-Space) 实现所有这些任务，所以没有这些问题。此模型的弊端是，
+    在多核系统上，这些程序通常扩展性较差。这就是为什么他们必须进行优化以 使每个CPU时间片(Cycle)做更多的工作。
+
+    HAProxy实际工作中，它占用用户空间时间要比内核运行时间少20倍，所以对系统参数调优是十分必要的一项工作。
+
+    另外衡量一个负载均衡服务器主要考量三个指标
+        session rate
+        此项指标非常重要，它决定了一个load balancer 能不能分发所有接受的请求。这项指标通常是由CPU性能决定。
+        测量指标的大小跟传输的每个对象的大小有关，通常用空对象来测试，Session rates 在 100,000 sessions/s 左右，使用 Xeon E5 在 2014测试。
+        session concurrency
+        该指标与前一指标相关联。这一指标与服务器内存和系统可以处理的文件描述符数量有关。 通常每个session占用34KB，
+        即大概3W个session占用1GB内存空间，实际上，socket buffer也会占用内存空间，2W个session socket占用1GB内存。
+        data forwarding rate
+        这一指标与 session rate 相对立，它的衡量单位通常是 Megabytes/s (MB/s), 或者 Gigabits/s (Gbps)。
+        传输较大的对象有利于该指标的提升，因为较大的对象传输可以减少session建立和关闭浪费的时间。而测量session rate 则在传输小对象时有利于指标提升。haproxy 在2014年使用 Xeon E5 测试成绩为40 Gbps。
+    二、HAProxy程序环境
+    本文环境：CentOS7.2 haproxy 1.5 通过yum 安装
+    程序环境：
+        配置文件：/etc/haproxy/haproxy.cfg
+            Unit File： haproxy.service
+            主程序：/usr/sbin/haproxy
+    配置文件：
+        global：全局配置段
+            进程及安全配置相关的参数
+            性能调整相关的参数
+            Debug相关的参数
+        proxies：代理配置段
+            defaults：为frontend, backend以及listen提供默认配置；
+            frontend：前端，相当于Nginx中的server{ ... }；
+            backend：后端，相当于nginx中的upstream { ...  };
+            listen：前后端的直接组合；
+        **关于前端与后端的关系：一个前端可以指向多个后端；同时一个后端可以被多个调用。
+    三、HAProxy配置详解
+    3.1 global配置段
+    3.1.1 进程相关配置
+        定义日志系统相关属性
+    log <address> [len <length>] <facility> [max level [min level]]
+    harpoxy 将日志发送到指定的rsyslog服务器，在本地记录也要开启rsyslog服务；
+    全局端最多可配置两个log 服务器；
+    < address> ：日志服务器地址
+    [ len ] 指定记录的日志最大长度
+        定义运行用户，所属组
+    username
+    group groupname
+
+        运行方式
+
+    意味着后台守护进程
+    3.1.2 参数调优
+
+        maxconn <number>：设定单haproxy进程的最大并发连接数；
+        maxconnrate <number>：设定单haproxy进程每秒接受的连接数；
+        maxsslconn <number>：设定单haproxy进程的ssl连接最大并发连接数；
+        maxsslrate <number>：单haproxy进程的ssl连接的创建速率上限；
+        spread-checks <0..50, in percent>：避免对于后端检测同时并发造成
+        的问题，设置错开时间比，范围0到50，一般设置2-5较好。
+
+    3.1.3 用户列表
+
+    用于对haproxy 状态监控页面的用户认证。至少要定义一个用户列表并且添加一个用户
+    密码可以加密或明文。
+
+    Example:
+
+    userlist L1
+      group G1 users tiger,scott
+      group G2 users xdb,scott
+
+      user tiger password $6$k6y3o.eP$JlKqe4(...)xHSwRv6J.C0/D7cV91
+      user scott insecure-password elgato
+      user xdb insecure-password hello
+
+    userlist L2
+      group G1
+      group G2
+
+      user tiger password $6$k6y3o.eP$JlKBx(...)xHSwRv6J.C0/D7cV91 groups G1
+      user scott insecure-password elgato groups G1,G2
+      user xdb insecure-password hello groups G2
+
+    3.2 proxy配置段
+
+    这部分配置在下列定义区域下使用
+
+            - defaults  < name >
+            - frontend < name >
+            - backend  < name >
+            - listen   < name >
+
+        “defaults” 区域定义了frontend，backend，listen 的默认参数
+        “frontend“ 区域描述了接收客户端请求的监听配置
+        ”backend“ 区域描述接受请求处理的后端服务器配置
+        ”listen“ 区域描述一组前端和后端直接一对一绑定的组配置
+
+    HAProxy 配置的关键字与区域限制特性，即有些关键字在某个区域不可以使用
+    下面开始讲解关键字的用法
+    3.2.1 常用配置指令
+
+    bind [<address>]:<port_range> [, ...] [param*]
+
+    仅在frontend和listen区域使用。定义服务监听端口地址等参数
+    [ param* ] 参数根据系统而定，一般不需要指定
+    example：
+
+    bind :80     #监听本机所有IP的80端口
+    bind *:80    #监听本机所有IP的80端口
+    bind 192.168.12.1:8080,10.1.0.12:8090
+
+    mode {tcp|http|health}
+
+    tcp：基于layer4实现代理，可代理大多数基于tcp的应用层协议，例如ssh/mysql/pgsql等；
+    http：客户端的http请求会被深度解析；
+    health：工作为健康状态检查响应模式，当请求到达时仅回应“OK”即断开连接；
+
+    balance <algorithm> [ <arguments> ]
+    balance url_param <param> [check_post]
+
+    在backend区域定义调度算法
+    < algorithm > 如下：
+
+        roundrobin
+
+    带有权重的轮询调度算法；
+    server后面使用weight来定义权重；
+    动态算法：支持权重的运行时调整，支持慢启动（缓慢接收大量请求在刚启动时）；仅支持最大4095个后端活动主机
+
+        static-rr
+        静态的roundrobin算法；
+
+    不支持权重的运行时调整及慢启动；但后端主机数量无限制；
+
+        leastconn
+        带权重的最少连接分配动态算法；
+
+    适用长连接应用协议，如ssh等
+
+        first
+        第一优先算法；
+
+    如果第一个服务端可接受请求则总是把连接分配给它，直到第一个服务端处于繁忙，分配给下一个，顺序按服务端的数字ID从小到大排列
+
+        source
+        源IP hash 算法；
+
+    该算法保证在后端服务器组没有减少或增加的情况下，能将来自同一客户端IP的请求分配至同一个服务端；
+    该算法适合在无法使用cookie插入的TCP模式下使用
+    动态算法或静态算法取决于hash-type；
+
+        uri
+        uri hash 算法；
+        该算法hash uri 的查询标记的左侧部分，或者指定whole 参数时hash全部uri；
+        该算法保证访问同一uri的请求分配至同一服务端，适用于后端为缓存服务器的情况，以提高缓存命中率；
+        动态算法或静态算法取决于hash-type；
+        另外：该算法支持追加参数[ < arguments > ]：
+        (1) whole ：hash完整uri
+        (2) len number：hash指定uri的长度
+        (3) depth nubmer：hash指定目录深度，每个”/”代表一个深度
+
+        uri_param
+
+    param hash 算法；
+
+    对用户请求的url中的< param >部分中的指定的参数的值(uri中”=”部分)作hash计算；
+    该算法适用于有用户识别参数的uri ，它保证同一user id 的请求分配至同一服务端；
+    若果check_post 标识启用，则在uri中没有找到”?”参数时，对HTTP Post 请求实体查找参数声明；
+    动态算法或静态算法取决于hash-type；
+
+    Example：
+
+    balance url_param userid
+    balance url_param session_id check_post 64
+
+        hdr(< name >)
+        HTTP 首部字段hash算法；
+
+    指定的http首部将会被取出做hash计算。如果没有值，则降至轮询调度；
+    动态算法或静态算法取决于hash-type；
+
+    hash_type < method >
+
+    在balance 指令中选定与hash 有关的算法，都会受此影响。
+    默认采取的方法为map-based
+    < method > 如下：
+
+        map-based：取模法，hash数据结构是静态数组；
+        该hash是静态的，不支持在线调整权重，不支持慢启动；
+
+    该算法调度平滑，后端服务器能够均匀承受负载;
+    缺点也是明显的：当服务器的总权重发生变化时，即有服务器上线或下线，都会导致调度结果整体改变。如果想避免此种情况应采用consistent 方法；
+
+        consistent：一致性哈希，哈希的数据结构是“树”；
+        该hash是动态的，支持在线调整权重，支持慢启动
+
+    每一个server 会在”树”中出现多次， 在树中查找hash key，并选择最近的server；
+    该方法的优点在于，当服务器的总权重发生变化时，对调度结果影响是局部的，不会引起大的变动。所以十分适合缓存服务器；
+    缺点：该算法不够平滑，很容易导致后端服务器负载不均衡。所以很有必要对服务器的权重以或者服务器ID进行调整；
+    为保持均匀负载，应该保证所有服务器ID保持一致；
+
+    server <name> <address>[:[port]] [param*]
+    default-server [param*]
+
+    server用于在backend和listen中定义一个主机;
+    default-server 用于设定server的默认参数；
+
+    [param*] 如下：
+
+        weight < weight >：当前server的权重；
+        id < number > ：设定server ID
+        cookie < value >：为当前server指定其cookie值，此值会在收到请求报文时进行检测，其功能在于实现基于cookie会话保持；
+        check：对当前server进行健康状态检测；
+        inter < delay >：时间间隔；
+        rise < count >：判定为“健康”状态需要检测的次数，默认2；
+        fall < count >：判定为“不健康”状态需要检测的次数，默认3；
+        addr <ipv4|ipv6>：健康状态检测时使用的地址；
+        port < port >：健康状态检测时使用的端口；
+        注意：默认为传输层检测，即探测端口是否能响应；需要执行应用层检测，则需要httpchk, smtpchk, mysql-check, pgsql-check, ssl-hello-chk；
+        maxconn ：当前server的最大并发连接数；
+        maxqueue ：当前server的等待队列的最大长度；
+        disabled：将主机标记为不可用；
+        redir ：将发往当前server的所有请求GET和HEAD类的请求均重定向至指定的URL；
+
+    Examples :
+    server first  10.1.1.1:1080 id 3 cookie first  check inter 1000 maxconn 10000 maxqueue 2000
+    server second 10.1.1.2:1080 id 4 cookie second check inter 1000
+
+    option httpchk
+    option httpchk <uri>
+    option httpchk <method> <uri>
+    option httpchk <method> <uri> <version>    
+
+    基于http协议作7层健康状态检测机制，默认是基于tcp层进行检测；
+    TCP 模式也可以使用该检测机制
+    < method > < uri > < version >：请求报文的超始行；
+    method 默认方法为 OPTIONS；返回状态码2XX，3XX意味成功；
+
+    Examples :
+    # Relay HTTPS traffic to Apache instance and check service availability
+    # using HTTP request "OPTIONS * HTTP/1.1" on port 80.
+    backend https_relay
+        mode tcp
+        option httpchk OPTIONS /index.html HTTP/1.1\r\nHost:\ www
+        server apache1 192.168.1.1:443 check port 80
+
+    http-check expect [!] <match> <pattern>
+
+    定义检测有效期望值；
+    ! 表示认定的错误值；< match > 可取值为：
+
+        status < string >
+        rstatus < regex > 正则方式
+        string < string >
+        rstring < regex >
+
+    Examples :
+    # only accept status 200 as valid
+    http-check expect status 200
+
+    # consider SQL errors as errors
+    http-check expect ! string SQL\ Error
+
+    # consider status 5xx only as errors
+    http-check expect ! rstatus ^5
+
+    # check that we have a correct hexadecimal tag before /html
+    http-check expect rstring <!--tag:[0-9a-f]*</html>
+
+    cookie <name> [ rewrite | insert | prefix ] [ indirect ] [ nocache ] [ postonly ] [ preserve ] [ httponly ] [ secure ] [ domain <domain> ]* [ maxidle <idle> ] [ maxlife <life> ]
+
+    启用基于cookie的会话黏性，要结合server指定的cookie参数一起实现;
+    常用形式：cookie WEBSRV insert nocache indirect
+
+    Example:
+    backend websrvs
+    balance     roundrobin
+    cookie WEBSRV insert nocache indirect
+    server      web1 10.1.0.68:80 check weight 2 maxconn 5000 cookie web1
+    server      web2 10.1.0.69:80 check weight 1 maxconn 3000 cookie web2
+
+    default_backend <backend>
+
+    当use_backend 的使用规则没有被匹配时，由default_backend 指定默认服务器组；
+    关于use_backend 使用后续会在acl 章节中讲解；
+    3.2.2 log 相关
+
+    为frontend或backend定义日志记录机制；
+
+    log global  ：使用全局定义的日志记录方式
+    log <address> [len <length>] <facility> [<level> [<minlevel>]]:自定义
+    no log :不记录
+    capture request header <name> len <length>
+    -->记录请求报文中的指定的首部的值于日志中；len用于指定要记录的信息的长度；
+    capture response header <name> len <length>
+    -->记录响应报文中的指定的首部的值于日志中；len用于指定要记录的信息的长度；
+    示例：
+        capture request header Referer len 30
+
+    3.2.3 自定义错误页面
+
+    - errorfile <code> <file>
+
+    < code > 指定HTTP返回的状态码。200, 400, 403, 408, 500, 502, 503, and 504 可使用；
+    < file > 指定一个文件代替HTTP响应；
+    Example：errorfile 503 /etc/haproxy/errorfiles/503sorry.http
+
+    - errorloc <code> <url>
+    - errorloc302 <code> <url>
+
+    发生错误时由haproxy重定向至指定url，以上两个命令等同，响应状态码为302
+    Example：errorloc 503 http://www.mydomain.com/index…
+
+    - errorloc303 <code> <url>
+
+    响应状态码为303，表示以GET方法重新请求页面
+    3.2.4 修改请求或响应报文首部
+
+    option forwardfor [ except <network> ] [ header <name> ] [ if-none ]
+
+    HAProxy把请求报文发往后端主机之前在请求报文添加“X-Forwared-For”首部
+    目的为使后端服务器可记录发出请求客户端的IP地址
+    [ except < network> ] ：选择排除的网络地址
+    [ header < name> ] ：不使用X-Forwared-For，自定义名称
+    [ if-none ]：有时请求原来带有该字段，此时不再更改
+    Example：option forwardfor if-none
+
+    reqadd  <string> [{if | unless} <cond>]
+    rspadd <string> [{if | unless} <cond>]
+
+    在HTTP请求或响应首部内容尾部添加值
+    Example：rspadd X-Via: HAProxy/1.5
+
+    reqdel  <search> [{if | unless} <cond>]
+    reqidel <search> [{if | unless} <cond>]  (不区分大小写)        
+
+    删除HTTP请求中正则匹配的所有首部
+
+    rspdel  <search> [{if | unless} <cond>]
+    rspidel <search> [{if | unless} <cond>]  (不区分大小写)
+
+    删除HTTP响应中正则匹配的所有首部。属于安全加强策略，删除一些服务器版本信息，防止针对攻击
+    Example：rspidel Server.*
+    3.2.5 超时时长设定
+
+    timeout client <timeout>
+
+    设定客户端最大非活动时长， 默认单位是ms；最好与timeout server一致
+
+    timeout server <timeout>
+
+    设定服务端最大非活动时长， 默认单位是ms；
+
+    timeout connect <timeout>
+
+    设定最大与服务端建立连接的时长
+
+    timeout http-keep-alive <timeout>
+
+    设定最大等待新请求的空闲时长，默认单位为ms；
+
+    timeout client-fin <timeout>
+
+    在客户端侧设定半关闭连接非活动超时
+
+    timeout server-fin <timeout>
+
+    在服务端侧设定半关闭连接非活动超时
+    Example：
+
+    defaults http
+    timeout connect 5s
+    timeout client 30s
+    timeout server 30s
+    timeout client-fin 10s
+    timeout http-keep-alive 500
+
+    四、使用ACLs和获取样本
+
+    Haproxy 能够从请求报文，响应报文，从客户端或者服务端信息，从表，环境信息等等中提取数据。提取这样的数据的动作我们称之为获取样本。进行检索时，这些样本可以用来实现各种目的，比如作为粘滞表的键，最常用的用途是，根据预定义的模式来进行匹配。
+    访问控制列表（ACL）提供一个灵活方案进行内容切换，或者在从请求，响应，任何环境状态中提取的数据基础之上做出决策。控制列表的原则很简单：
+
+        从数据流，表，环境中提取数据样本
+        对提取的样本可选地应用格式转换
+        对一个样本应用一个或多个模式匹配
+        当模式匹配样本时才执行动作
+
+    执行的动作通常是阻断请求，选择一个后端服务器或者添加一个HTTP首部
+    需要提醒的是，获取的样本数据不光可以使用在acl中，也可以使用别处，例如记录log中
+    定义ACL的语法为：
+
+    acl <aclname> <criterion> [flags] [operator] [<value>] ...
+
+    这样一条语句建立了一个acl 测试；
+    这些测试应用在请求或响应中被”标准”< criterion > 部分所指定的内容，而且可以指定[ flags] 进行特性调整，有些< criterion > 支持操作符[operator] 进行运算，同时一些转换格式的关键字可以跟在< criterion >后面，使用” , “隔开。而值[< value >] 要求被
+    < criterion > 所支持的数据形式，多个值使用空格分隔。
+    < criterion > 通常是指获取样本方法的名称。使用一个获取样本方法，暗含着其输出样本的类型，类型是以下列出的一种：
+
+        boolean
+        integer (signed or unsigned)
+        IPv4 or IPv6 address
+        string
+        data block
+
+    ACL引擎匹配数据使用的模式类型如下：
+
+        boolean
+        integer or integer range
+        IP address / network
+        string (exact, substring, suffix, prefix, subdir, domain)
+        regular expression
+        hex block
+
+    ACL flags 可用列表如下:
+
+        -i : 忽略大小写
+        -f filename : 从文件中载入模式
+        -m method : 指定模式匹配方法
+        -n : 禁止DNS解析
+        -M : -f 载入的文件作为映射文件使用
+        -u : 强制ACL的名称唯一
+        — : 强制结束flag结束，避免了字符串中含有的- 引起混淆
+
+    其中flag中的 -m 选项可使用的模式匹配方法如下，需要说明的是有些方法已被默认指定无需声明，例如int，ip
+
+        “found” : 只是用来探测数据流中是否存在指定数据，不进行任何比较
+        “bool” : 检查结果返回布尔值。匹配没有模式，可以匹配布尔值或整数，不匹配0和false，其他值可以匹配
+        “int” : 匹配整数类型数据；可以处理整数和布尔值类型样本，0代表false，1代表true
+        “ip” : 匹配IPv4，IPv6地址类型数据。该模式仅被IP地址兼容，不需要特别指定
+        “bin” : 匹配二进制数据
+        “len” : 匹配样本的长度的整数值
+        “str” : 精确匹配，根据字符串匹配文本
+        “sub” : 子串匹配，匹配文本是否包含子串
+        “reg” : 正则匹配，根据正则表达式列表匹配文本
+        “beg” : 前缀匹配，检查文本是否以指定字符串开头
+        “end” : 后缀匹配，检查文本是否以指定字符串结尾
+        “dir” : 子目录匹配，检查部分文本中以” / “作为分隔符的内容是否含有指定字符串
+        “dom” : 域匹配。检查部分文本中以” . “作为分隔符的内容是否含有指定字符串
+
+    如果获取样本值为整数，数值比较符可使用，：
+
+    eq : true if the tested value equals at least one value
+    ge : true if the tested value is greater than or equal to at least one value
+    gt : true if the tested value is greater than at least one value
+    le : true if the tested value is less than or equal to at least one value
+    lt : true if the tested value is less than at least one value
+
+    想必前面一堆理论性的论述已经把大家搞的晕头转向，下面结合获取样本方法和访问控制动作指令具体阐述ACL使用方法
+
+    先介绍控制动作指令
+
+        layer 4 传输层控制指令
+
+    tcp-request connection <action> [{if | unless} <condition>]
+
+    对tcp请求控制指令
+    < condition > 即为ACL定义的访问控制列表
+    < action > 常用值有 “accept”, “reject”
+
+        layer 7 应用层控制指令
+
+    #阻断符合ACL的访问请求
+    block { if | unless } <condition> 
+    #http请求的控制指令
+    http-request { allow | deny}  [ { if | unless } <condition> ]
+
+        后端主机调用
+
+    #根据条件来调用指定后端
+    use_backend <backend> [{if | unless} <condition>]
+
+        由ACL定义的多个< condition > 组成联合条件，逻辑符为
+            and (默认操作符，可省略)
+            or (或者使用 “||”)
+            ! (取反)
+
+    4.1 获取内部状态样本
+
+    # 与后端建立会话速率，每秒钟建立的新会话
+    be_sess_rate([<backend>]) : integer
+
+    Example :
+
+    # 某后端被请求过于繁忙，则重定向至错误页
+        mode http
+        acl being_scanned be_sess_rate gt 100
+        redirect location /denied.html if being_scanned
+
+    4.2 获取layer 4 样本
+
+    在传输层获取样本，通常是TCP/IP 协议的IP和端口，以及建立连接速率等等。而且此部分样本通常用于”tcp-request connection”指令中的规则之中。
+
+            dst : ip             #目标地址
+            dst_port : integer
+            src : ip             #源地址
+            src_port : integer
+
+    Example:
+
+    #阻断来自非指定IP的访问8080端口的请求
+    acl myhost src 10.1.0.200
+    acl myport dst_port 8080
+    tcp-request connection reject if !myhost myport        
+
+    4.3 获取layer 7 样本
+
+    /1
+
+    path : string
+
+    提取请求url的地址信息，从第一个”/”开始，不包含host，不包含参数
+    ACL 衍生，即包含了-m 选项中匹配模式方法 :
+
+    path : exact string match
+    path_beg : prefix match
+    path_dir : subdir match
+    path_dom : domain match
+    path_end : suffix match
+    path_len : length match
+    path_reg : regex match
+    path_sub : substring match
+
+    Example：
+
+    #请求资源为图片，则调用图片服务器后端
+     acl picture path_end -i .jpg .png .gif
+     use_backend server_pic if picture
+
+    /2
+
+    url : string
+
+    提取URL的全部内容，包含host和参数
+    ACL 衍生类似，不再列举
+
+    /3
+
+    req.hdr([<name>[,<occ>]]) : string
+
+    提取http请求的指定首部字段值，< occ >可指定出现的位置
+    ACL 衍生 :
+
+      hdr([<name>[,<occ>]])     : exact string match
+      hdr_beg([<name>[,<occ>]]) : prefix match
+      hdr_dir([<name>[,<occ>]]) : subdir match
+      hdr_dom([<name>[,<occ>]]) : domain match
+      hdr_end([<name>[,<occ>]]) : suffix match
+      hdr_len([<name>[,<occ>]]) : length match
+      hdr_reg([<name>[,<occ>]]) : regex match
+      hdr_sub([<name>[,<occ>]]) : substring match
+
+    Example：
+
+    #阻断火狐浏览器发送的请求
+    acl firefox hdr_reg(User-Agent)     -i      .*firefox.*
+    block if firefox
+
+    /4
+
+    method : integer + string
+
+    提取请求报文中的请求方法
+
+    Example：
+
+    #拒绝GET HEAD 方式之外的HTTP请求
+    acl valid_method method GET HEAD
+    http-request deny if ! valid_method
+
+    4.4 内建ACL
+
+    HAProxy有众多内建的ACLs，这些ACLs可直接调用，例如
+
+        LOCALHOST 匹配来自本地IP的连接，127.0.0.1/8
+        HTTP_1.1 匹配http版本1.1
+        METH_GET 匹配http请求GET或HEAD方法
+        TRUE
+        FALSE
+
+    Example:
+
+    #拒绝GET HEAD 方式之外的HTTP请求
+    http-request deny if ! METH_GET
+
+七、HAProxy系列—配置文件详解
+    haproxy 配置中分成五部分内容，分别如下：
+
+        global：参数是进程级的，通常是和操作系统相关。这些参数一般只设置一次，如果配置无误，就不需要再次进行修改；
+
+        defaults：配置默认参数，这些参数可以被用到frontend，backend，Listen组件；
+
+        frontend：接收请求的前端虚拟节点，Frontend可以更加规则直接指定具体使用后端的backend；
+
+        backend：后端服务集群的配置，是真实服务器，一个Backend对应一个或者多个实体服务器；
+
+        Listen Fronted和backend的组合体。
+
+    global   # 全局参数的设置
+        log 127.0.0.1 local0 info
+        # log语法：log <address_1>[max_level_1] # 全局的日志配置，使用log关键字，指定使用127.0.0.1上的syslog服务中的local0日志设备，记录日志等级为info的日志
+        user haproxy
+        group haproxy
+        # 设置运行haproxy的用户和组，也可使用uid，gid关键字替代之
+        daemon
+        # 以守护进程的方式运行
+        nbproc 16
+        # 设置haproxy启动时的进程数，根据官方文档的解释，我将其理解为：该值的设置应该和服务器的CPU核心数一致，即常见的2颗8核心CPU的服务器，即共有16核心，则可以将其值设置为：<=16 ，创建多个进程数，可以减少每个进程的任务队列，但是过多的进程数也可能会导致进程的崩溃。这里我设置为16
+        maxconn 4096
+        # 定义每个haproxy进程的最大连接数 ，由于每个连接包括一个客户端和一个服务器端，所以单个进程的TCP会话最大数目将是该值的两倍。
+        #ulimit -n 65536
+        # 设置最大打开的文件描述符数，在1.4的官方文档中提示，该值会自动计算，所以不建议进行设置
+        pidfile /var/run/haproxy.pid
+        # 定义haproxy的pid 
+    defaults # 默认部分的定义
+        mode http
+        # mode语法：mode {http|tcp|health} 。http是七层模式，tcp是四层模式，health是健康检测，返回OK
+        log 127.0.0.1 local3 err
+        # 使用127.0.0.1上的syslog服务的local3设备记录错误信息
+        retries 3
+        # 定义连接后端服务器的失败重连次数，连接失败次数超过此值后将会将对应后端服务器标记为不可用
+        option httplog
+        # 启用日志记录HTTP请求，默认haproxy日志记录是不记录HTTP请求的，只记录“时间[Jan 5 13:23:46] 日志服务器[127.0.0.1] 实例名已经pid[haproxy[25218]] 信息[Proxy http_80_in stopped.]”，日志格式很简单。
+        option redispatch
+        # 当使用了cookie时，haproxy将会将其请求的后端服务器的serverID插入到cookie中，以保证会话的SESSION持久性；而此时，如果后端的服务器宕掉了，但是客户端的cookie是不会刷新的，如果设置此参数，将会将客户的请求强制定向到另外一个后端server上，以保证服务的正常。
+        option abortonclose
+        # 当服务器负载很高的时候，自动结束掉当前队列处理比较久的链接
+        option dontlognull
+        # 启用该项，日志中将不会记录空连接。所谓空连接就是在上游的负载均衡器或者监控系统为了探测该服务是否存活可用时，需要定期的连接或者获取某一固定的组件或页面，或者探测扫描端口是否在监听或开放等动作被称为空连接；官方文档中标注，如果该服务上游没有其他的负载均衡器的话，建议不要使用该参数，因为互联网上的恶意扫描或其他动作就不会被记录下来
+        option httpclose
+        # 这个参数我是这样理解的：使用该参数，每处理完一个request时，haproxy都会去检查http头中的Connection的值，如果该值不是close，haproxy将会将其删除，如果该值为空将会添加为：Connection: close。使每个客户端和服务器端在完成一次传输后都会主动关闭TCP连接。与该参数类似的另外一个参数是“option forceclose”，该参数的作用是强制关闭对外的服务通道，因为有的服务器端收到Connection: close时，也不会自动关闭TCP连接，如果客户端也不关闭，连接就会一直处于打开，直到超时。
+        contimeout 5000
+        # 设置成功连接到一台服务器的最长等待时间，默认单位是毫秒，新版本的haproxy使用timeout connect替代，该参数向后兼容
+        clitimeout 3000
+        # 设置连接客户端发送数据时的成功连接最长等待时间，默认单位是毫秒，新版本haproxy使用timeout client替代。该参数向后兼容
+        srvtimeout 3000
+        # 设置服务器端回应客户度数据发送的最长等待时间，默认单位是毫秒，新版本haproxy使用timeout server替代。该参数向后兼容
+
+    listen status # 定义一个名为status的部分
+        bind 0.0.0.0:1080
+        # 定义监听的套接字
+        mode http
+        # 定义为HTTP模式
+        log global
+        # 继承global中log的定义
+        stats refresh 30s
+        # stats是haproxy的一个统计页面的套接字，该参数设置统计页面的刷新间隔为30s
+        stats uri /admin?stats
+        # 设置统计页面的uri为/admin?stats
+        stats realm Private lands
+        # 设置统计页面认证时的提示内容
+        stats auth admin:password
+        # 设置统计页面认证的用户和密码，如果要设置多个，另起一行写入即可
+        stats hide-version
+        # 隐藏统计页面上的haproxy版本信息
+
+    frontend http_80_in # 定义一个名为http_80_in的前端部分
+        bind 0.0.0.0:80
+        # http_80_in定义前端部分监听的套接字
+        mode http
+        # 定义为HTTP模式
+        log global
+        # 继承global中log的定义
+        option forwardfor
+        # 启用X-Forwarded-For，在requests头部插入客户端IP发送给后端的server，使后端server获取到客户端的真实IP
+        acl static_down nbsrv(static_server) lt 1
+        # 定义一个名叫static_down的acl，当backend static_sever中存活机器数小于1时会被匹配到
+        acl php_web url_reg /*.php$
+        #acl php_web path_end .php
+        # 定义一个名叫php_web的acl，当请求的url末尾是以.php结尾的，将会被匹配到，上面两种写法任选其一
+        acl static_web url_reg /*.(css|jpg|png|jpeg|js|gif)$
+        #acl static_web path_end .gif .png .jpg .css .js .jpeg
+        # 定义一个名叫static_web的acl，当请求的url末尾是以.css、.jpg、.png、.jpeg、.js、.gif结尾的，将会被匹配到，上面两种写法任选其一
+        use_backend php_server if static_down
+        # 如果满足策略static_down时，就将请求交予backend php_server
+        use_backend php_server if php_web
+        # 如果满足策略php_web时，就将请求交予backend php_server
+        use_backend static_server if static_web
+        # 如果满足策略static_web时，就将请求交予backend static_server
+
+    backend php_server #定义一个名为php_server的后端部分
+        mode http
+        # 设置为http模式
+        balance source
+        # 设置haproxy的调度算法为源地址hash
+        cookie SERVERID
+        # 允许向cookie插入SERVERID，每台服务器的SERVERID可在下面使用cookie关键字定义
+        option httpchk GET /test/index.php
+        # 开启对后端服务器的健康检测，通过GET /test/index.php来判断后端服务器的健康情况
+        server php_server_1 10.12.25.68:80 cookie 1 check inter 2000 rise 3 fall 3 weight 2
+        server php_server_2 10.12.25.72:80 cookie 2 check inter 2000 rise 3 fall 3 weight 1
+        server php_server_bak 10.12.25.79:80 cookie 3 check inter 1500 rise 3 fall 3 backup
+        # server语法：server [:port] [param*] # 使用server关键字来设置后端服务器；为后端服务器所设置的内部名称[php_server_1]，
+        该名称将会呈现在日志或警报中、后端服务器的IP地址，支持端口映射[10.12.25.68:80]、指定该服务器的SERVERID为1[cookie 1]、接受健康监测[check]、监测的间隔时长，单位毫秒[inter 2000]、监测正常多少次后被认为后端服务器是可用的[rise 3]、监测失败多少次后被认为后端服务器是不可用的[fall 3]、分发的权重[weight 2]、最后为备份用的后端服务器，当正常的服务器全部都宕机后，才会启用备份服务器[backup]
+
+    backend static_server
+        mode http
+        option httpchk GET /test/index.html
+        server static_server_1 10.12.25.83:80 cookie 3 check inter 2000 rise 3 fall 3
+        
+        
+八、CentOS 7：使用HAProxy实现Nginx负载均衡
+    HAProxy是一款功能强大、灵活好用的反向代理的开源软件，它提供了负载均衡、服务器代理的功能。HAProxy是Willy Tarreau使用C语言编写的，
+    它支持SSL、压缩、keep-alive、自定义日志格式和header重写。
+    HAProxy是轻量级的负载均衡和代理服务软件，占用系统资源较少。很多大型的网站都在使用它，例如Github、StackOverflow。
+    下面我安装配置HAProxy做为两个Nginx服务器的负载均衡。一共需要使用3个服务器，在一台机器上安装HAProxy，另两台机器安装Nginx服务。
+    HAProxy的基本概念
+    4层和7层
+    HAProxy可以使用两种模式运行：TCP 4层模式和HTTP 7层模式。TCP模式：HAProxy把原始TCP数据包从客户端转向到应用服务器；HTTP模式：
+    解析http请求，然后转向到web服务器。我们将使用HTTP 7层模式。
+    负载均衡算法
+    HAProxy使用负载均衡算法决定把请求发送给哪个服务器，使用的算法：
+    Roundrobin－轮流算法
+    这是最简单的负载均衡算法。对每个新连接，总是下一个后端服务器处理。如果到达最后一个后端服务器，从头开始。
+    Lastconn
+
+    有最少连接的后端服务器处理新请求。当请求量较大时非常好。
+
+    Source
+
+    根据客户端IP决定哪个后端服务器处理。如果IP1是server1处理，那么这个IP1的所有请求都由server1处理。根据IP地址的哈希值决定后端服务器。
+    系统要求
+
+    3个CentOS 7服务器：
+
+        处理负载均衡的HAProxy服务器：192.168.0.101
+
+        Nginx1服务器：192.168.0.108
+
+        Nginx2服务器：192.168.0.109
+
+    第一步
+
+    编辑HAProxy服务器(102.168.0.101)的/etc/hosts：
+
+    vim /etc/hosts
+
+    添加Nginx1和Nginx2的主机名：
+
+    192.168.0.108    nginx1.your_domain.com     nginx1
+    192.168.0.109    nginx2.your_domain.com     nginx2
+
+    保存退出。
+
+    同样，编辑两个Nginx服务器的/etc/hosts，添加：
+
+    192.168.0.101    loadbalancer
+
+    在两个Nginx服务器上都要设置。
+    第二步
+
+    在HAProxy服务器上安装HAProxy：
+
+    # yum update
+    # yum install haproxy
+
+    haproxy的配置文件位于/etc/haproxy/。为了防止出错，先备份原始配置文件：
+
+    # cd /etc/haproxy/
+    # mv haproxy.cfg haproxy.cfg.backup
+
+    编辑配置文件：
+
+    # vim haproxy.cfg
+
+    写入如下内容：
+
+    #---------------------------------------------------------------------
+    # 全局设置
+    #---------------------------------------------------------------------
+    global
+    log         127.0.0.1 local2     # 日志
+    chroot      /var/lib/haproxy
+    pidfile     /var/run/haproxy.pid
+    maxconn     4000                
+    user        haproxy             # Haproxy在haproxy用户和组下运行
+    group       haproxy
+    daemon
+    # 开启 stats unix socket
+    stats socket /var/lib/haproxy/stats
+    #---------------------------------------------------------------------
+    # 基本设置
+    #---------------------------------------------------------------------
+    defaults
+    mode                    http
+    log                     global
+    option                  httplog
+    option                  dontlognull
+    option http-server-close
+    option forwardfor       except 127.0.0.0/8
+    option                  redispatch
+    retries                 3
+    timeout http-request    10s
+    timeout queue           1m
+    timeout connect         10s
+    timeout client          1m
+    timeout server          1m
+    timeout http-keep-alive 10s
+    timeout check           10s
+    maxconn                 3000
+    #---------------------------------------------------------------------
+    # HAProxy Monitoring 配置
+    #---------------------------------------------------------------------
+    listen haproxy3-monitoring *:8080                # Haproxy Monitoring 的使用端口：8080
+    mode http
+    option forwardfor
+    option httpclose
+    stats enable
+    stats show-legends
+    stats refresh 5s
+    stats uri /stats                            # HAProxy monitoring的网址
+    stats realm Haproxy\ Statistics
+    stats auth testuser:test1234                # 登录Monitoring的用户和密码
+    stats admin if TRUE
+    default_backend app-main
+    #---------------------------------------------------------------------
+    # FrontEnd 配置
+    #---------------------------------------------------------------------
+    frontend main
+    bind *:80
+    option http-server-close
+    option forwardfor
+    default_backend app-main
+    #---------------------------------------------------------------------
+    # 使用roundrobin做为负载均衡算法
+    #---------------------------------------------------------------------
+    backend app-main
+    balance roundrobin                                    # 使用的负载均衡算法
+    option httpchk HEAD / HTTP/1.1\r\nHost:\ localhost    # 检查nginx服务器是否连通- 200状态码
+    server nginx1 192.168.0.108:80 check                  # Nginx1 
+    server nginx2 192.168.0.109:80 check                  # Nginx2
+    配置rsyslog
+
+    我们需要使用rsyslog记录HAProxy的日志，编辑rsyslog.conf配置文件，打开UDP的514端口：
+
+    # vim /etc/rsyslog.conf
+
+    去掉如下行的注释：
+
+    $ModLoad imudp
+    $UDPServerRun 514
+
+    如果你想指定特定IP，可以更改如下行：
+
+    $UDPServerAddress 127.0.0.1
+
+    保存退出。
+
+    创建rsyslog配置文件：
+
+    # vim /etc/rsyslog.d/haproxy.conf
+
+    写入如下内容：
+
+    local2.=info     /var/log/haproxy-access.log    # 访问日志
+    local2.notice    /var/log/haproxy-info.log      # haproxy执行信息
+
+    重启rsyslog：
+
+    # systemctl restart rsyslog
+
+    启动HAProxy：
+
+    # systemctl start haproxy
+    # systemctl enable haproxy
+
+    第三步
+
+    安装配置Nginx。
+
+    Nginx1和Nginx2服务器配置方法相同。
+
+    安装epel-release：
+
+    # yum install epel-release
+
+    安装Nginx：
+
+    # yum install nginx
+
+    创建index.html测试文件，Nginx1(192.168.0.108)：
+
+    # cd /usr/share/nginx/html/
+    # echo "<h1>nginx1.your_domain.com</h1>" > index.html
+    Nginx2(192.168.0.109)：
+    # cd /usr/share/nginx/html/
+    # echo "<h1>nginx2.your_domain.com</h1>" > index.html
+
+    启动Nginx服务：
+
+    # systemctl enable nginx
+    # systemctl start nginx
+
+    测试
+
+    测试nginx1、2，使用浏览器访问：
+
+    192.168.0.108
+    192.168.0.109
+
+    正常访问网站：http://192.168.0.101，如果有域名，指向这个IP。
+    登录HAProxy web管理页面：
+
+    http://192.168.0.101:8080/stats
+
+    你应该可以看到nginx、http请求的转发信息。
+
+九、反向代理之haproxy安装及简单配置tcp代理
+    一、简介
+
+    HAProxy提供高可用性、负载均衡以及基于TCP和HTTP应用的代理，支持虚拟主机，它是免费、快速并且
+    可靠的一种解决方案。
+
+    HAProxy特别适用于那些负载特大的web站点，这些站点通常又需要会话保持或七层处理。
+
+    HAProxy运行在当前的硬件上，完全可以支持数以万计的并发连接。并且它的运行模式使得它可以很简单
+    安全的整合进您当前的架构中，同时可以保护你的web服务器不被暴露到网络上。
+
+    HAProxy实现了一种事件驱动, 单一进程模型，此模型支持非常大的并发连接数。多进程或多线程模型受内存限制 、系统调度器限制以及无处不在的锁限制，很少能处理数千并发连接
+    事件驱动模型因为在有更好的资源和时间管理的用户空间(User-Space) 实现所有这些任务，所以没有这些问题。此模型的弊端是，在多核系统上，这些程序通常扩展性较差。
+
+    这就是为什么他们必须进行优化以 使每个CPU时间片(Cycle)做更多的工作。
+    二、安装
+    1. 环境准备
+
+    环境设置:
+
+    web-node1:
+    [root@web-node1 src]# uname -r
+    3.10.0-229.el7.x86_64
+    [root@web-node1 src]# uname -m
+    x86_64
+    [root@web-node1 src]# cat /etc/hostname 
+    web-node1
+    [root@web-node1 src]# cat /etc/hosts
+    127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+    ::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+    10.0.0.64    zabbix_master
+    10.0.0.65    web-node1
+    10.0.0.66    web-node2
+    web-node2:
+    [root@web-node2 src]# uname -r
+    3.10.0-229.el7.x86_64
+    [root@web-node2 src]# uname -m
+    x86_64
+    [root@web-node2 src]# cat /etc/hostname 
+    web-node2
+    [root@web-node2 src]# cat /etc/hosts
+    127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+    ::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+    10.0.0.64    zabbix_master
+    10.0.0.65    web-node1
+    10.0.0.66    web-node2
+
+    2. 安装haproxy
+
+    目前haproxy最高版本是1.7.8，本次实验使用1.7.5
+
+    下载地址：http://www.haproxy.org/download/1.7/
+
+    web-node1:
+
+    [root@web-node1 haproxy-1.7.5]#    cd /usr/local/src
+    [root@web-node1 ]# wget http://www.haproxy.org/download/1.7/src/haproxy-1.7.5.tar.gz
+    [root@web-node1 haproxy-1.7.5]#  tar -zxf  haproxy-1.7.5.tar.gz 
+    [root@web-node1 haproxy-1.7.5]#  cd haproxy-1.7.5
+    [root@web-node1 haproxy-1.7.5]#   make TARGET=linux2628 PREFIX=/usr/local/haproxy-1.7.5
+    [root@web-node1 haproxy-1.7.5]# make install PREFIX=/usr/local/haproxy-1.7.5
+    [root@web-node1 haproxy-1.7.5]# cp /usr/local/sbin/haproxy /usr/sbin/
+    [root@web-node1 local]# ln -s /usr/local/haproxy-1.7.5 /usr/local/haproxy
+    [root@web-node1 haproxy-1.7.5]# haproxy -v
+    HA-Proxy version 1.7.5 2017/04/03
+    Copyright 2000-2017 Willy Tarreau <willy@haproxy.org>
+    #参数说明
+    TARGET=linux26 #内核版本，使用uname -r查看内核，如：2.6.18-371.el5，此时该参数就为linux26；kernel 大于2.6.28的用：TARGET=linux2628
+    PREFIX=/usr/local/haprpxy #/usr/local/haprpxy为haprpxy安装路径
+
+    3. 编辑Haproxy启动脚本
+
+    [root@web-node1 haproxy-1.7.5]# cp /usr/local/src/haproxy-1.7.5/examples/haproxy.init /etc/init.d/haproxy
+    [root@web-node1 haproxy-1.7.5]# chmod +x /etc/init.d/haproxy
+
+    4. 创建haproxy相关目录
+
+    [root@web-node1 haproxy-1.7.5]# useradd -r haproxy  ##创建系统用户
+    [root@web-node1 haproxy-1.7.5]# mkdir /etc/haproxy
+    [root@web-node1 haproxy-1.7.5]# mkdir /var/lib/haproxy
+    [root@web-node1 haproxy-1.7.5]# mkdir /var/run/haproxy
+
+    5. 修改配置文件
+
+    [root@web-node1 haproxy-1.7.5]# cat /etc/haproxy/haproxy.cfg 
+    global
+       log 127.0.0.1 local3 warning
+       chroot /var/lib/haproxy
+       user haproxy
+       group haproxy
+       nbproc  1
+       maxconn 65535 
+       daemon
+    defaults
+       log global
+       option dontlognull
+       timeout connect 5000
+       timeout client 50000
+       timeout server 50000
+    listen test
+     bind 10.0.0.65:8080
+     mode tcp
+     #balance roundrobin
+     timeout server 15s
+     timeout connect 15s
+     server web01 10.0.0.66:22 check port 22 inter 5000 fall 5 
+
+    6. 启动haproxy
+
+    检查语法：
+    /usr/sbin/haproxy  -f /etc/haproxy/haproxy.cfg -c
+    [root@web-node1 haproxy-1.7.5]# /etc/init.d/haproxy start
+    查看进程：
+    [root@web-node1 haproxy-1.7.5]# ps -ef|grep haproxy
+    haproxy   11126      1  0 16:20 ?        00:00:00 /usr/sbin/haproxy -D -f /etc/haproxy/haproxy.cfg -p /var/run/haproxy.pid
+    root      11183   2633  0 16:32 pts/1    00:00:00 grep --color=auto haproxy
+
+    三、测试tcp代理是否成功
+
+    上述可以看出已经成功了。
+    
+十一、配置Haproxy代理实现MySQL从服务器的负载均衡
+            haproxy本身支持TCP协议的负载均衡转发，对于各种基于tcp的软件进行负载均衡比如mysql，之前配置的web负载均衡都是基于应用层，今天记录下tcp的。
+        环境准备：
+            centos 6.x三台，具体如下:
+                IP：192.168.1.104 角色：haproxy,mysql_master
+                IP：192.168.1.122 角色：mysql_slave
+                IP：192.168.1.123 角色：mysql_slave
+            说明：
+                mysql主从安装这里不单独配置写出，配置非常简单，可以参考之前的博客文章《Linux系统如何设置mysql数据库主从以及互为主从》
+                （http://www.21yunwei.com/archives/1035）
+                由于1.104已经配置了mysql_master占用了3306端口，haproxy我们启用3307端口测试。
+        一、配置haproxy
+        global                                                     
+            log         127.0.0.1 local2                     
+            chroot      /usr/share/haproxy
+            pidfile     /var/run/haproxy.pid         
+            maxconn     4000                                
+            user        haproxy
+            group       haproxy                        
+            daemon                                               
+        defaults
+                mode tcp               #默认的模式mode { tcp|http|health }，tcp是4层，http是7层，health只会返回OK
+                retries 2               #两次连接失败就认为是服务器不可用，也可以通过后面设置
+                option redispatch       #当serverId对应的服务器挂掉后，强制定向到其他健康的服务器
+                option abortonclose     #当服务器负载很高的时候，自动结束掉当前队列处理比较久的链接
+                maxconn 4096            #默认的最大连接数
+                timeout connect 5000ms  #连接超时
+                timeout client 30000ms  #客户端超时
+                timeout server 30000ms  #服务器超时
+                #timeout check 2000      #=心跳检测超时
+                log 127.0.0.1 local0 err #[err warning info debug]
+        listen test1
+                bind 192.168.1.104:3307
+                mode tcp
+                #maxconn 4086
+                #log 127.0.0.1 local0 debug
+                server s1 192.168.1.122:3306
+                server s2 192.168.1.123:3306
+        二、测试mysql的负载均衡
+        利用navicat连接192.168.1.104的3307端口，理论上我们会连接到后端的122或者123的mysql上，为了区别，我们分别从mysql_slave单独建立两个库以便区分：
+            192.168.1.122 mysql_slave建立测试数据库web122;
+            192.168.1.123 mysql_slave建立测试数据库web123;
+        (具体sql语句：create database web122/123 default charset utf8;)
+        连接测试：
+        连接进入查看：
+        查看我们连接到了192.168.1.123 mysql_slave，看到了建立的测试库web123.
+        断开连接，重新连接：
+        查看我们连接到了192.168.1.122 mysql_slave，看到了建立的测试库web122.
+        总结，配置Haproxy代理实现MySQL从服务器的负载均衡已经完成。后续需要根据配置文件进行一些参数的优化或者架构的优化，比如配置keepalive实现高可用、根据mysql_slave配置分配权重等等，具体情况具体分析。
+
+    十二、安装配置HAProxy实现RabbitMQ的负载均衡
+    HAProxy提供高可用性、负载均衡以及基于TCP和HTTP应用的代理，支持虚拟主机，它是免费、快速并且可靠的一种解决方案,包括Twitter，Reddit，StackOverflow，GitHub在内的多家知名互联网公司在使用。HAProxy实现了一种事件驱动、单一进程模型，此模型支持非常大的并发连接数。
+    安装HAProxy
+
+    首先需要去HAProxy的官网下载HAProxy的安装文件，目前最新的版本为：haproxy-1.7.8.tar.gz。下载地址为http://www.haproxy.org/#down，相关文档地址为http://www.haproxy.org/#doc1.7。
+
+    将haproxy-1.7.8.tar.gz拷贝至/opt目录下，与RabbitMQ存放在同一个目录中。之后解压缩：
+
+    [root@node1 opt]# tar zxvf haproxy-1.7.8.tar.gz
+
+    将源码解压之后，需要运行make来将HAProxy编译为可执行程序。在执行make之前需要先选择目标平台，通常对于UNIX系的操作系统可以选择TARGET=generic。下面是详细操作：
+
+    [root@node1 opt]# cd haproxy-1.7.8
+    [root@node1 haproxy-1.7.8]# make TARGET=generic
+    gcc -Iinclude -Iebtree -Wall  -O2 -g -fno-strict-aliasing -Wdeclaration-after-statement -fwrapv      
+    -DTPROXY -DENABLE_POLL  
+    -DCONFIG_HAPROXY_VERSION=\"1.7.8\" 
+    -DCONFIG_HAPROXY_DATE=\"2017/07/07\" \
+              -DBUILD_TARGET='"generic"' \
+              -DBUILD_ARCH='""' \
+              -DBUILD_CPU='"generic"' \
+              -DBUILD_CC='"gcc"' \
+              -DBUILD_CFLAGS='"-O2 -g -fno-strict-aliasing -Wdeclaration-after-statement -fwrapv"' \
+              -DBUILD_OPTIONS='""' \
+               -c -o src/haproxy.o src/haproxy.c
+    gcc -Iinclude -Iebtree -Wall  -O2 -g -fno-strict-aliasing -Wdeclaration-after-statement -fwrapv...
+    ...
+    gcc  -g -o haproxy src/haproxy.o src/base64.o src/protocol.o src/uri_auth.o ...
+
+    编译完目录下有名为“haproxy”的可执行文件。之后再/etc/profile中加入haproxy的路径，内容如下：
+
+    export PATH=$PATH:/opt/haproxy-1.7.8/haproxy
+
+    最后执行source /etc/profile让此环境变量生效。
+    配置HAProxy
+
+    HAProxy使用单一配置文件来定义所有属性，包括从前端IP到后端服务器。下面展示了用于3个RabbitMQ节点组成集群的负载均衡配置。这3个节点的IP地址分别为192.168.02、192.168.0.3、192.168.0.4，HAProxy运行在192.168.0.9这台机器上。
+
+    #全局配置
+    global
+            #日志输出配置，所有日志都记录在本机，通过local0输出
+            log 127.0.0.1 local0 info
+            #最大连接数
+            maxconn 4096
+            #改变当前的工作目录
+            chroot /opt/haproxy-1.7.8
+            #以指定的UID运行haproxy进程
+            uid 99
+            #以指定的GID运行haproxy进程
+            gid 99
+            #以守护进程方式运行haproxy #debug #quiet
+            daemon
+            #debug
+            #当前进程pid文件
+            pidfile /opt/haproxy-1.7.8/haproxy.pid
+
+    #默认配置
+    defaults
+            #应用全局的日志配置
+            log global
+            #默认的模式mode{tcp|http|health}
+            #tcp是4层，http是7层，health只返回OK
+            mode tcp
+            #日志类别tcplog
+            option tcplog
+            #不记录健康检查日志信息
+            option dontlognull
+            #3次失败则认为服务不可用
+            retries 3
+            #每个进程可用的最大连接数
+            maxconn 2000
+            #连接超时
+            timeout connect 5s
+            #客户端超时
+            timeout client 120s
+            #服务端超时
+            timeout server 120s
+
+    #绑定配置
+    listen rabbitmq_cluster 5671
+            #配置TCP模式
+            mode tcp
+            #简单的轮询
+            balance roundrobin
+            #RabbitMQ集群节点配置
+            server rmq_node1 192.168.0.2:5672 check inter 5000 rise 2 fall 3 weight 1
+            server rmq_node2 192.168.0.3:5672 check inter 5000 rise 2 fall 3 weight 1
+            server rmq_node3 192.168.0.4:5672 check inter 5000 rise 2 fall 3 weight 1
+
+    #haproxy监控页面地址
+    listen monitor :8100
+            mode http
+            option httplog
+            stats enable
+            stats uri /stats
+            stats refresh 5s
+
+    在上面的配置中“listen rabbitmq_cluster bind 192.168.0.9.5671”这里定义了客户端连接IP地址和端口号。这里配置的负载均衡算法是roundrobin，注意这里的roundrobin是加权轮询。和RabbitMQ最相关的是“ server rmq_node1 192.168.0.2:5672 check inter 5000 rise 2 fall 3 weight 1”这种，它定义了RabbitMQ服务，每个RabbitMQ服务定义指令包含6个部分：
+
+    server <name>：定义RabbitMQ服务的内部标示，注意这里的“rmq_node”是指包含有含义的字符串名称，不是指RabbitMQ的节点名称。
+    <ip>:<port>：定义RabbitMQ服务的连接的IP地址和端口号。
+    check inter <value>：定义了每隔多少毫秒检查RabbitMQ服务是否可用。
+    rise <value>：定义了RabbitMQ服务在发生故障之后，需要多少次健康检查才能被再次确认可用。
+    fall <value>：定义需要经历多少次失败的健康检查之后，HAProxy才会停止使用此RabbitMQ服务。
+    weight <value>：定义了当前RabbitMQ服务的权重。
+
+    最后一段配置定义的是HAProxy的数据统计页面。数据统计页面包含各个服务节点的状态、连接、负载等信息。在调用：
+
+    [root@node1 haproxy-1.7.8]# haproxy -f haproxy.cfg
+
+    运行HAProxy之后可以在浏览器上输入http://192.168.0.9:8100/stats来加载相关的页面，如下图所示：
+    
+   十四、haproxy配置https负载均衡
+       本实验全部在haproxy1.5.19版本进行测试通过，经过测试1.7.X及haproxy1.3版本以下haproxy配置参数可能不适用，需要注意版本号。
+    一、业务要求
+
+    现在根据业务的实际需要，有以下几种不同的需求。如下：
+    1.1 http跳转https
+
+    把所有请求http://www.chinasoft.com的地址全部跳转为https//:www.chinasoft.com这个地址
+    1.2 http与https并存
+
+    服务器同时开放http://www.chinasoft.com和https://www.chinasoft.com的访问形式
+    1.3 服务器环境准备
+
+    node1即haproxy所在服务器的处理
+
+    安装依赖
+
+    yum install -y openssl openssl-devel readline-devel pcre-devel libssl-dev libpcre3
+
+    # 下载安装包，
+    tar zxf haproxy-1.5.19.tar.gz
+    cd haproxy-1.5.19
+    # 加入支持ssl的编译参数
+
+    make TARGET=linux2628 USE_PCRE=1 USE_OPENSSL=1 USE_ZLIB=1 USE_CRYPT_H=1 USE_LIBCRYPT=1
+    cp /usr/local/sbin/haproxy /usr/sbin/
+    make install PREFIX=/usr/local/haproxy
+    cp /usr/local/sbin/haproxy /usr/sbin/
+    cp examples/haproxy.init /etc/init.d/haproxy
+
+    # 修改启动脚本(可能会报错)为如下
+    vim /etc/init.d/haproxy
+    26 [[ ${NETWORKING} = "no" ]] && exit 0
+
+    后端web01(192.168.3.200)服务器apache配置，需要配置虚拟主机域名为：www.chinasoft.com否则无法正常处理
+
+    [root@node2 ~]# egrep -v '#|^$' /etc/httpd/conf/httpd.conf 
+    ServerRoot "/etc/httpd"
+    Listen 8080
+    Include conf.modules.d/*.conf
+    User apache
+    Group apache
+    ServerAdmin root@localhost
+    <Directory />
+    Options FollowSymLinks
+    AllowOverride none
+    Allow from all
+    </Directory>
+    DocumentRoot "/var/www/html/chinasoft"
+    <Directory "/var/www">
+    AllowOverride None
+    Require all granted
+    </Directory>
+    <Directory "/var/www/html/chinasoft">
+    Options Indexes FollowSymLinks
+    AllowOverride None
+    Require all granted
+    </Directory>
+    <IfModule dir_module>
+    DirectoryIndex index.php index.html
+    </IfModule>
+    <Files ".ht*">
+    Require all denied
+    </Files>
+    ErrorLog "logs/error_log"
+    LogLevel warn
+    <IfModule log_config_module>
+    LogFormat "%h %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\"" combined
+    LogFormat "%h %l %u %t \"%r\" %>s %b" common
+    <IfModule logio_module>
+    LogFormat "%h %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\" %I %O" combinedio
+    </IfModule>
+    CustomLog "logs/access_log" combined
+    </IfModule>
+    <IfModule alias_module>
+    ScriptAlias /cgi-bin/ "/var/www/cgi-bin/"
+    </IfModule>
+    <Directory "/var/www/cgi-bin">
+    AllowOverride None
+    Options None
+    Require all granted
+    </Directory>
+    <IfModule mime_module>
+    TypesConfig /etc/mime.types
+    AddType application/x-compress .Z
+    AddType application/x-gzip .gz .tgz
+    AddType text/html .shtml
+    AddOutputFilter INCLUDES .shtml
+    </IfModule>
+    AddDefaultCharset UTF-8
+    <IfModule mime_magic_module>
+    MIMEMagicFile conf/magic
+    </IfModule>
+    EnableSendfile on
+    IncludeOptional conf.d/*.conf
+
+    [root@node2 ~]# cat /etc/httpd/conf.d/vhost.conf 
+    NameVirtualHost *:8080
+    <VirtualHost *:8080>
+    DocumentRoot /var/www/html/
+    ServerName 192.168.3.200:8080
+    </VirtualHost>
+
+    <Directory "/var/www/html/chinasoft/">
+    php_admin_value open_basedir "/var/www/html/chinasoft/:/tmp/"
+    Options Includes ExecCGI FollowSymLinks
+    AllowOverride All
+    Order allow,deny
+    Allow from all
+    </Directory>
+    <VirtualHost *:8080>
+    DocumentRoot /var/www/html/chinasoft/
+    ServerName www.chinasoft.com:8080
+    </VirtualHost>
+
+    1.4 证书的处理，需要将网站的根证书和key简单的合并在一起：
+
+    cat chinasoft.com.pem chinasoft.com.key | tee chinasoft.pem
+
+    否则会报错
+
+    'bind *:443' : unable to load SSL private key from PEM file
+
+    1.5 域名的指向及处理
+
+    将www.chinasoft.com指向haproxy负载均衡器所在的服务器IP地址，此处是192.168.3.198
+    二、配置haproxy并测试业务需求
+
+    现在我们根据业务的需求，我们来配置haproxy一一达到其需求。
+    2.1 http跳转https配置
+
+    http跳转https的haproxy配置文件内容，如下：
+
+    [root@node1 haproxy]# cat /etc/haproxy/haproxy.cfg
+    global
+    log 127.0.0.1 local3 info
+    chroot /var/lib/haproxy
+    maxconn 4096
+    user haproxy
+    group haproxy
+    daemon
+    stats socket /var/lib/haproxy/haproxy.sock mode 600 level admin
+    stats timeout 2m
+    tune.ssl.default-dh-param 2048
+
+    defaults
+    log global
+    mode http
+    option httplog
+    option dontlognull
+    option http-server-close
+    option forwardfor except 127.0.0.1
+    option redispatch
+    retries 3
+    option redispatch
+    maxconn 2000
+    timeout http-request 10s
+    timeout queue 1m
+    timeout connect 10s
+    timeout client 1m
+    timeout server 1m
+    timeout http-keep-alive 10s
+    timeout check 10s
+
+    listen admin_stats
+    bind 0.0.0.0:1080
+    mode http
+    option httplog
+    maxconn 10
+    stats refresh 30s
+    stats uri /haproxy?stats
+    stats auth admin:admin
+    stats hide-version
+
+    frontend weblb
+    bind *:80
+    acl is_http hdr_beg(host) www.chinasoft.com
+    redirect scheme https if !{ ssl_fc }
+    bind *:443 ssl crt /etc/haproxy/chinasoft.pem
+    use_backend httpserver if is_http
+
+    backend httpserver
+    balance source
+    server web1 192.168.3.200:8080 maxconn 1024 weight 3 check inter 2000 rise 2 fall 3
+
+
+
+    # 配置好之后先检查语法是否正确
+    [root@node1 haproxy]# /etc/init.d/haproxy check
+    Configuration file is valid
+
+    在以上配置文件中，需要注意的选项如下：
+
+    tune.ssl.default-dh-param 2048因为我们的SSL密钥使用的是2048bit加密，所以在此进行声明。
+
+    acl is_http hdr_beg(host) www.chinasoft.com
+    redirect scheme https if !{ ssl_fc }
+    bind *:443 ssl crt /etc/haproxy/chinasoft.pem
+
+    这三行表示把所有访问www.chinasoft.com这个域名的请求，全部转发到https://www.chinasoft.com这个连接
+
+    管理页面
+
+    2.2 测试http跳转https
+
+    http跳转https配置完毕后，我们选择来测试其跳转。如下：
+
+    你会发现在浏览器中，无论你输入的是www.chinasoft.com，还是http://www.chinasoft.com亦或是https://www.chinasoft.com，都会自动跳转到https://www.chinasoft.com。
+
+    这样就达到了，把所有的http请求跳转到https的目的。
+    2.3 http与https并存配置
+
+    haproxy要实现http和https并存的话，配置也很简单，只需要把haproxy分别监控不同的端口就行，配置文件如下：
+
+    [root@node1 haproxy]# cat haproxy.cfg
+    global
+    log 127.0.0.1 local3 info
+    chroot /var/lib/haproxy
+    maxconn 4096
+    user haproxy
+    group haproxy
+    daemon
+    stats socket /var/lib/haproxy/haproxy.sock mode 600 level admin
+    stats timeout 2m
+    tune.ssl.default-dh-param 2048
+
+    defaults
+    log global
+    mode http
+    option httplog
+    option dontlognull
+    option redispatch
+    retries 3
+    option redispatch
+    maxconn 2000
+    timeout connect 10s
+    timeout client 1m
+    timeout server 1m
+    timeout check 10s
+
+    listen admin_stats
+    bind 0.0.0.0:1080
+    mode http
+    option httplog
+    maxconn 10
+    stats refresh 30s
+    stats uri /haproxy?stats
+    stats auth admin:admin
+    stats hide-version
+
+    frontend weblb
+    bind *:80
+    acl is_http hdr_beg(host) www.chinasoft.com
+    use_backend httpserver if is_http
+
+    backend httpserver
+    balance source
+    server web1 192.168.3.200:8080 maxconn 1024 weight 3 check inter 2000 rise 2 fall 3
+
+    frontend weblb443
+    bind *:443 ssl crt /etc/haproxy/chinasoft.pem
+    acl is_443 hdr_beg(host) www.chinasoft.com
+    use_backend httpserver443 if is_443
+
+    backend httpserver443
+    balance source
+    server web1 192.168.3.200:8080 maxconn 1024 weight 3 check inter 2000 rise 2 fall 3
+
+    在以上配置文件中，我们定义了两个前端，一个前端用于监听80端口，也就是http协议。另外一个前端监听443端口，也就是https协议。
+
+    此时haproxy会根据客户端请求的协议进行分发，如果发现客户端请求的是http协议，则把该请求分发到监听80端口的前端。如果发现客户端请求的是https协议，则把该请求分发到监听443端口的前端。如此就达到了haproxy让http和https并存的要求。
+    2.4 测试http与https并存
+
+    http与https并存配置完毕后，我们选择来测试其跳转。如下：
+
+    通过测试你会发现，在浏览器中如果你输入的是http://www.chinasoft.com或者是www.chinasoft.com都会直接跳转到http://www.chinasoft.com，而输入的是https://www.chinasoft.com，则只会跳转到https://www.chinasoft.com。
+
+    如此就到达了，我们业务的要求实现http和https并存。
+    
+   十五、配置HAproxy实现动静态请求分离
+   一. 简述
+
+在现实的应用环境中，往往根据业务请求的不同将相关的请求指定到不同的后端服务器中，例如客户是静态资源的请求，haproxy就将请求转发给静态服务器，如果是动态的请求就转发给静态服务器，haproxy实现动静分离是通过acl匹配规则来实现这一目的。
+
+二. 具体的步骤：
+
+（1）在192.168.180.4上配置static服务器
+
+[root@Monitor conf]# vim /data/index.html 
+<h1>192.168.180.4---static</h1>
+
+[root@Monitor conf]# vim /usr/local/nginx/conf/nginx.conf       
+worker_processes  1;
+user appuser appuser;
+error_log  /data/nginx/error.log;
+events {
+    worker_connections  1024;
+}
+http {
+    include       mime.types;
+    default_type  application/octet-stream;
+    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+   sendfile        on;
+    access_log      /data/nginx/access.log;
+    keepalive_timeout  65;
+    gzip  on;
+    server_tokens off;
+
+ server {
+         listen    80;
+         server_name  192.168.180.4;
+         access_log  /data/nginx/nginx.access.log;
+         index   index.php  index.html index.htm;
+       # root       /data/www/;
+         root      /data/;
+         }
+     }
+[root@Monitor conf]# /usr/local/nginx/sbin/nginx -s reload
+
+保存后直接加载nginx ,在浏览器上查看该页面
+
+（2）在192.168.180.9安装配置php服务器。
+
+[root@localhost www]# vim /www/html/www/index.php 
+<h1>this is 192.168.180.9---dynamic for php page</h1>
+
+[root@localhost www]# cat  /usr/local/nginx/conf/nginx.conf
+worker_processes  1;
+#error_log  logs/error.log  info;
+#pid        logs/nginx.pid;
+events {
+    worker_connections  1024;
+}
+http {
+    include       mime.types;
+    default_type  application/octet-stream;
+    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+    access_log  logs/access.log  main;
+    sendfile        on;
+    tcp_nopush     on;
+    keepalive_timeout  65;
+    gzip  on;
+   server {
+       listen 80;
+       location ~ .php$ {
+                   root /www/html/www;
+                   fastcgi_pass 127.0.0.1:9000;
+                   fastcgi_index index.php;
+                   fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+                    include fastcgi_params;
+                 }
+     }
+ }
+
+重新加载nginx ,在浏览器中查看如下界面：
+
+（3）在192.168.180.2服务器中安装配置jsp测试界面
+
+[root@ittestserver1 m]# vim 1.jsp
+this is test jsp page
+[root@ittestserver1 conf]# /usr/local/tomcat/bin/startup.sh 
+Using CATALINA_BASE:   /usr/local/tomcat
+Using CATALINA_HOME:   /usr/local/tomcat
+Using CATALINA_TMPDIR: /usr/local/tomcat/temp
+Using JRE_HOME:        /usr/java/jdk1.7.0_79
+Using CLASSPATH:       /usr/local/tomcat/bin/bootstrap.jar:/usr/local/tomcat/bin/tomcat-juli.jar
+Tomcat started.
+
+查看测试界面
+
+（4）接下来是最重要的配置haproxy服务器
+
+[root@localhost haproxy]# vim /etc/haproxy/haproxy.cfg
+#---------------------------------------------------------------------
+# Global settings
+#---------------------------------------------------------------------
+global
+ log 127.0.0.1 local2 info  ###[err warning info debug] 
+ chroot /usr/local/haproxy
+ pidfile /var/run/haproxy.pid ###haproxy的pid存放路径,启动进程的用户必须有权限访问此文件 
+ maxconn 4000     ###最大连接数，默认4000
+ user haproxy
+ group haproxy
+ daemon       ###创建1个进程进入deamon模式运行。此参数要求将运行模式设置为"daemon"
+
+#---------------------------------------------------------------------
+# common defaults that all the 'listen' and 'backend' sections will 
+# use if not designated in their block
+#---------------------------------------------------------------------
+defaults
+ mode http    ###默认的模式mode { tcp|http|health }，tcp是4层，http是7层，health只会返回OK
+ log global   ###采用全局定义的日志
+ option dontlognull  ###不记录健康检查的日志信息
+ option httpclose  ###每次请求完毕后主动关闭http通道 
+ option httplog   ###日志类别http日志格式 
+ option forwardfor  ###如果后端服务器需要获得客户端真实ip需要配置的参数，可以从Http Header中获得客户端ip 
+ option redispatch  ###serverId对应的服务器挂掉后,强制定向到其他健康的服务器
+ timeout connect 10000 #default 10 second timeout if a backend is not found
+ timeout client 300000 ###客户端连接超时
+ timeout server 300000 ###服务器连接超时
+ maxconn  60000  ###最大连接数
+ retries  3   ###3次连接失败就认为服务不可用，也可以通过后面设置 
+####################################################################
+listen stats
+  bind 0.0.0.0:1080   #监听端口 
+  stats refresh 30s   #统计页面自动刷新时间 
+  stats uri /stats   #统计页面url 
+  stats realm Haproxy Manager #统计页面密码框上提示文本 
+  stats auth admin:admin  #统计页面用户名和密码设置 
+  stats hide-version   #隐藏统计页面上HAProxy的版本信息
+  stats enable         ###启用管理界面
+  stats admin if TRUE  ##如果登录成功就可以管理在线服务器
+#---------------------------------------------------------------------
+# main frontend which proxys to the backends
+#---------------------------------------------------------------------
+frontend main
+#frontend   www    # *表示haproxy监听所有地址，监听的端口为80
+ bind 0.0.0.0:80
+# bind *:8080
+#######定义访问控制，表示url以.css .js .html .php结尾的分别调度到哪台服务器上访问
+# acl  url_static    path_beg  -i   /static /images /javascript /stylesheets
+ acl  url_static    path_end  -i   .jpg .gif .png .css .js .html
+ acl  url_dynamic_php   path_end  -i   .php
+ acl  url_dynamic_jsp   path_end  -i   .jsp
+#######usr_backend表示使用backend服务，if表示如果满足url_static这个条件就调度到这台服务器上
+ use_backend         static          if url_static  ###满足策略要求，则响应策略定义的backend静态页面
+ use_backend         dynamic_php     if url_dynamic_php   ###满足策略要求，则响应策略定义的backend静态页面
+  se_backend         dynamic_jsp     if url_dynamic_jsp  ###满足策略要求，则响应策略定义的backend静态页面
+# default_backend     dynamic                  ###不满足则响应backend的默认动态页面
+# default_backend     dynamic                  ###不满足则响应backend的默认动态页面
+
+#---------------------------------------------------------------------
+# static backend for serving up images, stylesheets and such
+#---------------------------------------------------------------------
+
+backend static           ###定义后端静态请求响应
+ balance  roundrobin     ###负载均衡模式轮询
+ server  static 192.168.180.4:80 check ###后端服务器定义
+#server  static 192.168.180.9:80 check ###后端服务器定义
+
+backend dynamic_php           #####定义后端动态请求响应
+ balance roundrobin
+ server   phpsrv1 192.168.180.9:80 check maxconn 2000
+# server   websrv1 dd192.168.180.9:80 check maxconn 2000
+#server   websrv2 192.168.180.4:80 check maxconn 2000
+# server   websrv2 192.168.180.2:443 check maxconn 2000
+backend dynamic_jsp           #####定义后端动态请求响应                                                           
+ balance roundrobin                                                                                               
+ server   jspsrv1 192.168.180.2:8081 check maxconn 2000   
+
+#---------------------------------------------------------------------
+# round robin balancing between the various backends
+#---------------------------------------------------------------------
+
+
+errorfile 403 /etc/haproxy/errorfiles/403.http
+
+errorfile 500 /etc/haproxy/errorfiles/500.http
+
+errorfile 502 /etc/haproxy/errorfiles/502.http
+
+errorfile 503 /etc/haproxy/errorfiles/503.http
+[root@localhost haproxy]# systemctl restart haproxy.service
+
+三. 测试
+
+（1）测试static页面并查看haproxy的访问日志;
+
+[root@localhost ~]# tail -f /var/log/haproxy.log 
+Jul 20 18:07:22 localhost haproxy[6436]: 192.168.181.231:53672 [20/Jul/2017:18:07:22.371] main static/static 0/0/0/1/1 304 167 - - ---- 0/0/0/0/0 0/0 "GET /index.html HTTP/1.1"
+
+（2）访问php页面
+
+[root@localhost ~]# tail -f /var/log/haproxy.log 
+Jul 20 18:08:36 localhost haproxy[6436]: 192.168.181.231:53834 [20/Jul/2017:18:08:36.261] main dynamic_php/phpsrv1 0/0/1/0/2 200 2332 - - ---- 0/0/0/0/0 0/0 "GET /index.php?=PHPE9568F35-D428-11d2-A769-00AA001ACF42 HTTP/1.1"
+
+（3）访问jsp页面
+
+[root@localhost ~]# tail -f /var/log/haproxy.log 
+Jul 20 18:09:58 localhost haproxy[6436]: 192.168.181.231:54015 [20/Jul/2017:18:09:57.999] main dynamic_jsp/jspsrv1 0/0/1/2/3 200 188 - - ---- 0/0/0/0/0 0/0 "GET /1.jsp HTTP/1.1"
+
+（4）查看haproxy监控页面
+
+总之:haproxy可以利用acl规则匹配url做相应的请求跳转，比如动静分离，域名跳转等等应用需求，haproxy是一款性能很强大的四层以及七层代理server。HAProxy运行在 当前的硬件上，完全可以支持数以万计的并发连接。并且它的运行模式使得它可以很简单安全的整合进您当前的架构中，同时可以保护你的web服务器不被暴露到网络上。

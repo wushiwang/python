@@ -1,0 +1,292 @@
+一、apache压力测试
+1. 介绍
+
+    网站性能压力测试是服务器网站性能调优过程中必不可缺少的一环。只有让服务器处在高压情况下，才能真正体现出软件、硬件等各种设置不当所暴露出的问题。
+
+性能测试工具目前最常见的有以下几种：ab、http_load、webbench、siege。今天我们专门来介绍ab。
+
+    ab是apache自带的压力测试工具。ab非常实用，它不仅可以对apache服务器进行网站访问压力测试，也可以对或其它类型的服务器进行压力测试。
+比如nginx、tomcat、IIS等。
+
+2. ab的原理
+    ab是apachebench命令的缩写。
+
+    ab的原理：ab命令会创建多个并发访问线程，模拟多个访问者同时对某一URL地址进行访问。它的测试目标是基于URL的，因此，它既可以用来测试apache
+的负载压力，也可以测试nginx、lighthttp、tomcat、IIS等其它Web服务器的压力。
+
+    ab命令对发出负载的计算机要求很低，它既不会占用很高CPU，也不会占用很多内存。但却会给目标服务器造成巨大的负载，其原理类似CC攻击。
+自己测试使用也需要注意，否则一次上太多的负载。可能造成目标服务器资源耗完，严重时甚至导致死机。
+
+3. ab的安装
+
+    ab的安装非常简单，如果是源码安装apache的话，那就更简单了。apache安装完毕后ab命令存放在apache安装目录的bin目录下。如下：/usr/local/apache2/bin
+可在apache官网下载安装包，也可以访问我提取好的链接下载http://pan.baidu.com/s/1eRVqgBC
+
+4. 使用
+    将ab.exe 放入c盘根目录,菜单输入cmd进入doc窗口，执行
+    ab.exe -c 100 -n 1000 http://127.0.0.1/app/login
+    
+    下面我们对这些参数，进行相关说明。如下：
+        -n 在测试会话中所执行的请求个数。默认时，仅执行一个请求。
+        -c 一次产生的请求个数。默认是一次一个。
+        
+             C:\>ab.exe -c 100 -n 1000 http://127.0.0.1/app/login
+            This is ApacheBench, Version 2.3 <$Revision: 655654 $>
+            Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
+            Licensed to The Apache Software Foundation, http://www.apache.org/
+
+            Benchmarking 127.0.0.1 (be patient)
+            Completed 100 requests
+            Completed 200 requests
+            Completed 300 requests
+            Completed 400 requests
+            Completed 500 requests
+            Completed 600 requests
+            Completed 700 requests
+            Completed 800 requests
+            Completed 900 requests
+            Completed 1000 requests
+            Finished 1000 requests
+
+
+            Server Software:        Apache-Coyote/1.1   #apache版本
+            Server Hostname:        127.0.0.1           #请求访问的IP
+            Server Port:            80                  #请求访问的端口
+
+            Document Path:          /app/login          #页面地址
+            Document Length:        65 bytes            #页面长度
+
+            Concurrency Level:      100                 #并发数
+            Time taken for tests:   0.899 seconds       #共使用时间
+            Complete requests:      1000                #总的请求数
+            Failed requests:        0                   #请求失败数
+            Write errors:           0
+            Total transferred:      206000 bytes        #总共传输字节数，包含http的头信息等  
+            HTML transferred:       65000 bytes         #html字节数，实际的页面传递字节数
+            Requests per second:    1112.28 [#/sec] (mean)  #每秒多少请求，这个是非常重要的参数数值，服务器的吞吐量  
+            Time per request:       89.905 [ms] (mean)  #用户平均请求等待时间  
+            Time per request:       0.899 [ms] (mean, across all concurrent requests)#服务器平均处理时间，也就是服务器吞吐量的倒数  
+            Transfer rate:          223.76 [Kbytes/sec] received #每秒获取的数据长度 
+
+            Connection Times (ms)
+                          min  mean[+/-sd] median   max
+            Connect:        0    0   0.3      0       5
+            Processing:     1   88 210.6      4     894
+            Waiting:        1   53 146.4      4     654
+            Total:          1   88 210.7      4     896
+
+            Percentage of the requests served within a certain time (ms)
+              50%      4 # 50%的请求在4ms内返回  
+              66%      6
+              75%     11
+              80%     27 # 80%的请求在27ms内返回  
+              90%    459
+              95%    614
+              98%    879
+              99%    887
+             100%    896 (longest request)
+
+5. Linux安装
+    yum install httpd-tools
+    ab -v
+    
+    
+    
+二、mysql的基准测试
+ 
+1、下载安装
+    Linu 自带版本大多为 0.4.12，最新版本可以从 Launchpad 下载安装步骤如下：
+    ./autogen.sh
+    ./configure
+    make && sudo make install
+
+    sysbench 依赖 mysql-dev 包的支持，如果 mysql 没有安装在默认位置，执行./configure 时需要配置–with-mysql-includes 和 –with-mysql-lib。
+具体参看源码包中 README 文档。
+
+安装完成后可以查看版本信息。
+
+    sysbench --version
+
+2、使用说明
+
+    简要说明 sysbench 的使用方法，侧重对数据库的测试。具体用法参考 sysbench –help。
+
+2.1 命令格式：
+
+    Sysbench [general-options]… –test=<test-name> [test-options]… command
+
+通用选项（general-options）：
+
+    –num-threads=N 指定要使用的线程
+
+    –report-interval=N 每隔 N 秒打印统计信息
+
+    –rand-XXX 随机分布相关配置
+
+内建测试项目（test-option）：
+
+    fileio – File I/O test
+    cpu – CPU performance test
+    memory – Memory functions speed test
+    threads – Threads subsystem performance test
+    mutex – Mutex performance test
+
+oltp，从 0.5 开始不再设置单独的选项，可以直接通过 Lua 脚本文件进行测试，兼容之前 oltp 的所有选项。
+
+以上所有的项目都可以通过 sysbench-0.5\sysbench\tests\ 下的测试脚本进行测试。
+
+2.2 测试项目选项（test-option）
+
+    各种内建测试项目的选项可以通过命令 sysbench –test= help 查看。
+
+2.3 命令（command）：
+
+    sysbench 做压力测试的时候分 3 个阶段：prepare(准备测试数据); run(运行压力测试); cleanup(清理测试数据)。
+3、内建测试说明
+
+3.1 CPU
+
+    sysbench 采用寻找最大素数的方式来测试 CPU 的性能。
+
+    sysbench --test=cpu  --cpu-max-prime=1000 run
+
+3.2 Fileio
+
+    Sysbench 的 I/O 测试和 InnoDB 的 I/O 模式非常类似。
+    sysbench --test=fileio –file_num=40 –-file-total-size=80G --file-test-mode=rndrw prepare
+    sysbench --test=fileio –file_num=40 –-file-total-size=80G --file-test-mode=rndrw run
+    sysbench --test=fileio –file_num=40 –-file-total-size=80G --file-test-mode=rndrw cleanup
+
+3.6 OLTP
+    Sysbench 0.5 中的 oltp.lua 提供了一个比之前版本中的 oltp 模式更为真实的场景来进行数据库的基准测试。和之前 oltp 模式中的单个表场景相比，
+0.5 通过 Lua 脚本可以对多个表进行工作测试。oltp.lua 可以理解原先 oltp 模式中的大多数选项。
+
+    所有的测试脚本位于/sysbench-0.5/sysbench/test/下，db 目录下是数据库测试项目，其中 common.lua 并非测试文件，是用于 prepare 和 cleanup。
+oltp.lua 文件用于测试事务性能，其中 thread_init 函数来初始化每个线程的参数，初始化工作调用了 common.lua 中的 set_vars()函数，
+来初始化 oltp 的相关参数。
+
+阶段 1： 连接数据库服务器
+
+    每次执行基准测试，不管是 prepare 还是 run，如果不是使用默认值的话，都应该指定如何连接数据库。默认值如下：
+
+    默认的数据库 sbtest，sysbench 不会自动创建该数据库。所以如果你要用过的话要首先。
+
+阶段 2：Prepare
+
+    如果使用默认值，首先要创建测试所用的表。创建方式有两种: oltp.lua (串行) 和 parallel_prepare.lua (并行)。
+
+    针对 database driver 还需要指明以下参数：
+
+创建表：
+    oltp.lua 中提供的 –oltp-tables-count 指明了表的数量。默认的表名是 sbtest。如果制定了 oltp-tables-count，则在表名后加数字，
+例如 sbtest1, sbtest2, .. sbtest[oltp-tables-count]，注意，此种情况下不会创建 sbtest 表。
+
+    通过选项 –oltp-secondary 可以在每个表上使用第二索引来替代主键。也就是说通过 KEY xid (ID) 而不是 PRIMARY KEY (ID) 来创建表。
+这个选项将会使 InnoDB 为每个表创建内部 6-byte 的索引。同样可以使用选项 –oltp-auto-in 将 id 字段设为递增。
+
+创建表 SQL 语句示例如下：
+
+CREATE TABLE `sbtest101` (
+     `id` int(10) unsigned NOT NULL auto_increment,                            
+     `k` int(10) unsigned NOT NULL default '0',
+     `c` char(120) NOT NULL default '',
+     `pad` char(60) NOT NULL default '',
+     PRIMARY KEY  (`id`),
+     KEY `k` (`k`));
+
+Parallel.lua（并行） 创建：
+
+    ./sysbench --test=tests/db/parallel_prepare.lua --mysql-user=USER --mysql-password=SECRET --oltp-tables-count=64 
+--num-threads=8 run
+
+注意：oltp-tables-count 应该是 num-threads 的整数倍。
+
+oltp.lua（串行）创建：
+
+    ./sysbench --test=tests/db/oltp.lua --mysql-user=USER --mysql-password=SECRET --mysql-table-engine=myisam 
+--oltp-table-size=1000000 --oltp-tables-count=64 --mysql-socket=/tmp/mysql.sock prepare
+
+阶段 3：Run
+
+    准备好测试环境之后就可以使用 oltp.lua 执行一系列的测试了，测试使用的线程数量通过选项 –num-threads 来指定。每个线程通过随
+机产生小于或者等于 oltp-tables-count 的数字来选择一个表。  
+    随机取样分布通过选项 –oltp-dist-type 来进行设置，该选项默认值是 special。Special 分布还和另外两个参数有关：–oltp-dist-pct，
+用来指定要特殊对待的记录的百分比，–oltp-dist-res 指定这些记录的概率。例如，对 1000 行记录进行 1000 次查询，–oltp-dist-pct=1 
+and –oltp-dist-res=50 结果，开始 10 条记录(1% of 1000)，每条记录选中五十次，总共 500 次，剩余的查询将会从 990 条记录中均匀采样。
+
+    选中表之后，就会执行相应的测试。他们将会打包为一个事务（transaction）传递给数据库服务器（除非使用 myisam 引擎，这样先会锁住表）。
+也可以单线程运行 oltp 的子集，例如 oltp_simple.lua, select.lua, insert.lua, delete.lua, update_index.lua, update_non_index.lua
+
+    SELECT tests
+    Select 还可以分为点选择测试（Point Select tests）和范围测试（Ranges tests）。
+
+        点测试
+        选项 oltp-point-selects 单次事务中点选择测试的查询次数。 每次测试，通过制定的分布来随机产生一个小于或者等于表大小
+   (oltp-table-size)的数字，然后执行下面的查询语句。 SELECT c FROM sbtestXXX WHERE id=N
+
+        范围测试
+        通过变量 oltp-range-size 可以制定要查询的范围（不大于表大小）
+
+        简单范围测试
+        选项 oltp-simple-ranges 单次事务中范围选择测试的查询次数。 每次通过指定的分布来产生一个不大于 oltp-talbe-size 
+    的整数 N，然后通过选项设置 oltp-range-size 设置整数 M，然后执行如下查询: SELECT c FROM sbtest WHERE id BETWEEN N AND M
+
+    范围求和（Sum in ranges）
+    选项 oltp_sum_ranges 单次事务中范围选择测试的查询次数。查询语句： SELECT SUM(K) FROM sbtest WHERE id BETWEEN N and M
+
+    范围排序（Order in ranges）
+    选项 oltp_order_ranges 单次事务中范围选择测试的查询次数。查询语句： SELECT c FROM sbtest WHERE id between N and M ORDER BY c
+
+    范围去重（Distincts in ranges）
+    选项 oltp-distinct-ranges 单次事务中范围选择测试的查询次数。查询语句：
+
+SELECT DISTINCT c FROM sbtest WHERE id BETWEEN N and M ORDER BY c
+
+    UPDATE tests
+
+只要没有指定 oltp-read-only=on 就能进行更新测试。
+
+1、index_update.lua
+
+选项 oltp_index_updates 单次事务中范围选择测试的查询次数。查询语句：
+
+UPDATE sbtest SET k=k+1 WHERE id=N
+
+2、non_index_update.lua
+
+选项 oltp-non-index-updates 单次事务中范围选择测试的查询次数。C 为随机产生的字符串，查询语句：
+
+UPDATE sbtest SET c=C WHERE id=N
+
+    DELETE test
+
+只要没有指定 oltp-read-only=on 就能进行更新测试。通过执行分布产生一个不大于 oltp-table-siez 的数字 N，执行语句：
+
+DELETE FROM sbtest WHERE id=N
+
+    INSERT test
+
+只要没有指定 oltp-read-only=on 就能进行更新测试。通过执行分布产生一个不大于 oltp-table-siez 的数字 N，执行语句：
+
+INSERT INTO sbtest (id, k, c, pad) VALUES N, K, C, PAD
+
+    使用举例：
+
+使用 5 个线程在 25 个 table 上进行默认测试：
+
+./sysbench --mysql-user=USER --mysql-password=SECRET --test=tests/db/oltp.lua --oltp-tables-count=25 --num-threads=5 run
+
+使用 10 个线程在 100 个 table 上进行 select 测试，10 个点测试和值为 1000 的范围测试：
+
+./sysbench --mysql-user=USER --mysql-password=SECRET --test=tests/db/select.lua --oltp-tables-count=100 --num-threads=10
+--oltp-point-selects=100 --oltp-range-size=1000 run
+
+阶段 4：清理（cleanup）
+
+可以通过清理操作来返回到准备的阶段。必须提供链接数据库服务器的选项和创建的表的数量。
+
+./sysbench --test=tests/db/oltp.lua --mysql-user=USER --mysql-password=SECRET --oltp-tables-count=64 cleanup
+
+
+
+

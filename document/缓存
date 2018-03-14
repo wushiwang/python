@@ -1,0 +1,98 @@
+介绍基于HAProxy的高性能缓存服务器nuster
+https://www.centos.bz/2018/01/%e4%bb%8b%e7%bb%8d%e5%9f%ba%e4%ba%8ehaproxy%e7%
+9a%84%e9%ab%98%e6%80%a7%e8%83%bd%e7%bc%93%e5%ad%98%e6%9c%8d%e5%8a%a1%e5%99%a8nuster/
+
+nginx反向代理缓存配置
+    http {
+    [...]
+    [...]
+     
+    proxy_cache_path  /data/nginx/cache/one  levels=1:2   keys_zone=one:10m max_size=10g;
+    proxy_cache_key  "$host$request_uri";
+     
+    server {
+        server_name www.centos.bz centos.bz;
+        root /home/www.centos.bz/web;
+        index index.php index.html index.htm;
+        location / {
+            proxy_pass http://127.0.0.1:8080;
+            proxy_set_header  Host "www.centos.bz";
+            proxy_set_header  X-Forwarded-For $proxy_add_x_forwarded_for;
+            #开启反向代理缓存，并使用zone name为one的缓存。
+            proxy_cache one;
+            #设置状态码为200 302过期时间为10分钟
+            proxy_cache_valid  200 302  10m;
+            #设置状态码404的过期时间为1分钟
+            proxy_cache_valid  404      1m;
+        }
+        #清除缓存
+        location ~ /purge(/.*) {
+            #允许的IP
+            allow 127.0.0.1;
+            deny all;
+            proxy_cache_purge one $host$1$is_args$args;
+        }
+    }
+     
+    }
+    
+    反向代理的缓存主要涉及以下几个命令：
+proxy_cache_path proxy_cache_key proxy_cache proxy_cache_valid。
+
+proxy_cache_path
+这个是设置缓存的目录，语法如下：
+proxy_cache_path path [ levels = levels ] keys_zone = name : size [ inactive = time ] [ max_size = size ] 
+[ loader_files = number ] [ loader_sleep = time ] [ loader_threshold = time ]
+可放置的上下文：
+http
+参数解释：
+[ levels = levels ]：
+设置缓存目录层数，如levels=1:2，表示创建两层目录缓存，最多创建三层。第一层目录名取proxy_cache_key md5的最后一个字符，
+第二层目录名取倒数2-3字符，如：
+proxy_cache_key md5为b7f54b2df7773722d382f4809d65029c，则：
+levels=1:2为/data/nginx/cache/c/29/b7f54b2df7773722d382f4809d65029c
+levels=1:2:3为/data/nginx/cache/c/29/650/b7f54b2df7773722d382f4809d65029c
+
+keys_zone = name : size：
+定义缓存区域名称及大小，缓存名称用于proxy_cache指令设置缓存放置在哪，如proxy_cache one，则把缓存放在zone名称为one的缓存区，
+即proxy_cache_path指定的具体位置。
+
+proxy_cache_key
+这个指令是设置以什么参数md5得到缓存的文件名，默认为$scheme$proxy_host$request_uri，即以协议、主机名、请求uri(包含参数)作md5得出缓存的文件名。
+proxy_cache_key与下面的清缓存功能(purge cache)有很大关系。
+可放置在上下文,http server location
+
+proxy_cache
+反向代理缓存设置指令，语法proxy_cache zone | off,默认为off。上下文：http server location。
+可以放到指定location，这样匹配此location的url才被缓存。
+
+proxy_cache_valid
+设置指定状态码的缓存时间，语法proxy_cache_valid [ code …] time。
+
+另外，清缓存需要安装插件ngx_cache_purge,安装方法如下：
+    cd /tmp
+    wget http://labs.frickle.com/files/ngx_cache_purge-2.1.tar.gz
+    tar xzf ngx_cache_purge-2.1.tar.gz
+    cd /tmp
+    wget http://nginx.org/download/nginx-1.4.2.tar.gz
+    tar xzf nginx-1.4.2.tar.gz
+    cd nginx-1.4.2
+    ./configure --prefix=/usr/local/nginx  --add-module=/tmp/ngx_cache_purge-2.1
+    make && make install
+    
+  BIND高速缓存DNS服务器配置
+  配置高速缓存DNS服务器非常的简单，首先当然是安装好bind9了，假设我们的bind安装目录为/usr/local/bind/，
+  我们建立一个主配置文件named.conf。
+
+    vi /usr/local/bind/etc/named.conf
+
+写入如下内容：
+
+    options {
+    directory "/usr/local/bind/etc/";
+    forward only;//所有请求转发到forwarders列表
+    forwarders { 8.8.8.8;8.8.4.4; };//定义转发请求目的IP
+    allow-query {any;};//允许所有客户查询
+    };
+    
+  

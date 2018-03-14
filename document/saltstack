@@ -1,0 +1,999 @@
+一、、安装
+    3、SaltStack的结构
+        saltstack采用C/S（客户端和server端）架构，salt-master为server端，salt-minion为客户端
+        a)Master与Minion认证
+        (1)、minion在第一次启动时，会在/etc/salt/pki/minion/（该路径在/etc/salt/minion里面设置）下自动生成minion.pem（private key）和
+    minion.pub（public key），然后将 minion.pub发送给master。
+        (2)、master在接收到minion的public key后，通过salt-key命令accept minion public key，这样在master的/etc/salt/pki/master/minions下
+    的将会存放以minion id命名的 public key，然后master就能对minion发送指令了。
+
+        b)Master与minion链接
+        (1)、SaltStack master启动后默认监听4505和4506两个端口。4505（publish_port）为saltstack的消息发布系统，4506（ret_port）为saltstack
+    客户端与服务端通信的端口。如果使用lsof 查看4505端口，会发现所有的minion在4505端口持续保持在ESTABLISHED状态。
+    
+    4、SaltStack基础安装与操作
+        (1)环境说明
+            192.168.1.12 安装salt-master salt-minion
+            192.168.1.100 安装salt-minion
+
+        1、本次操作采用CentOS 7.2系统
+            # cat /etc/redhat-release 
+            CentOS Linux release 7.2.1511 (Core) 
+
+            # uname -r
+            3.10.0-327.el7.x86_64
+
+            # hostname -I
+            192.168.1.12
+
+            # hostname -I
+            192.168.1.100
+
+        2、操作系统基础优化
+            参考博客：http://blog.51cto.com/12217917/2060136
+    5、yum安装SaltStack
+        # rpm -ivh https://repo.saltstack.com/yum/redhat/salt-repo-latest-2.el7.noarch.rpm    #两台服务器都安装rpm包
+        1、salt管理节点安装
+            # yum install -y salt-master salt-minion
+        2、salt所有客户端安装（被管理的机器）
+            # yum install -y salt-minion
+    6、启动Salt
+        1、管理端启动命令
+
+        # systemctl start salt-master      #master端启动命令
+        # tree /etc/salt/pki        #启动后查看目录结构
+        pki
+        └── master
+            ├── master.pem     #salt-master的公钥
+            ├── master.pub     #salt-master的私钥
+            ├── minions
+            ├── minions_autosign
+            ├── minions_denied
+            ├── minions_pre
+            └── minions_rejected
+
+        2、配置客户端并启动客户端
+
+        # sed -n '16p' /etc/salt/minion         #修改所有客户端的配置文件
+        master: 192.168.56.11      #告诉客户端   salt-master是谁，：冒号后面需要有空格
+        注：minion配置文件的关于ID配置，{如果配置ID则使用配置里的ID作为主机通讯标记，如果不配置ID则默认以主机名作为ID为主机通讯标记
+      （本人生产上的主机名都做修改所以这里没有配置ID），ID如果修改，需要删除之前认证的KEY，然后重新添加KEY。}
+        # systemctl start salt-minion        #启动客户端
+        注：修改客户端通讯ID的步骤{1.停止需要修改ID的salt-minion  2.salt-key 删除老的id   3.删除minion端的/etc/salt/minion_id  
+        4.删除minion端/etc/salt/pki  5.修改minion配置文件的id   6.启动minion   7.master端重新salt-key加入}
+
+        # tree      #启动后查看客户端的结构
+        .
+        ├── minion
+        ├── minion.d
+        ├── minion_id
+        └── pki
+            └── minion
+                ├── minion.pem    #minion的公钥
+                └── minion.pub    #minion的私钥
+
+    7、在master端添加客户端
+
+        说明：这一步操作就相当与签劳动合同，表示客户端（salt-minion）接受server端（salt-master）管理。
+
+        # salt-key          #查看客户端的命令
+        Accepted Keys:    #已经同意的key有哪些
+        Denied Keys:      #拒绝的key有哪些
+        Unaccepted Keys:    #未同意的key有哪些
+        linux-node1     #客户端的通讯ID（由于前面没有配置，这里以主机名的形式出现）
+        linux-node2     #客户端的通讯ID（由于前面没有配置，这里以主机名的形式出现）
+
+        # salt-key -A        #-A表示同意所有的客户端通讯ID
+        The following keys are going to be accepted:
+        Unaccepted Keys:
+        db02-36
+        saltstack-41
+        Proceed? [n/Y] y    #确认信息，是否同意这两个key
+        Key for minion linux-node1
+        Key for minion linux-node2
+
+        关于salt-key的参数
+        -d 删除单个key，也支持*号模糊匹配删除   (针对key的操作)
+        -D 删除所有key，慎用                    (针对key的操作)
+        -L 列表                                 (远程执行、列表key等)
+        -A 同意所有key                          (针对key的操作)
+        -a 同意单个，可以用*号迷糊匹配添加      (针对key的操作)
+        -G 匹配Grains                           (远程执行)
+        -I 匹配Pillar                             (远程执行)
+        -E 支持正则表达式                       (远程执行)
+        -S 指定客户端的ip地址                   (远程执行)
+        -C 一条远程执行的命令同时支持多个参数   (远程执行)
+        -N 支持节点组                           (远程执行)
+        更多操作请通过salt-key --help来查看
+
+    8、master端确认是否能连接到客户端（salt-minion端）
+        1、测试所有客户端是否能通讯
+            # salt '*' test.ping        #{*为通配符，表示所有。test为模块，ping为test模块下的一个方法（测试是否能通讯）}
+            linux-node2
+                True      #True为通，False为失败
+            linux-node1
+                True
+        2、远程执行shell命令
+            # salt ' linux-node2 ' cmd.run "w"       #单独指定某个客户端的通讯ID表示在这台客户端执行（cmd.cun表示执行shell命令，
+            支持linux下所有的shell命令）
+            linux-node2:
+                 20:26:56 up  2:10,  1 user,  load average: 0.00, 0.01, 0.05
+                 
+                 
+二、配置文件详解
+https://www.centos.bz/2018/01/saltstack%e9%85%8d%e7%bd%ae%e6%96%87%e4%bb%b6%e8%af%a6%e8%a7%a3/
+
+三、saltstack配置
+    1、salt-master的配置文件编写格式之YAML语法说明
+            YAML语法数据的结构通过缩进来表示，每一级用两个空格来表示缩进，如果有下一级结构需要以冒号结尾，连续的列表通过减号“-”来表示，
+       减号后面需要有空格，不是以冒号结尾的冒号后面需要有空格。
+    2、修改salt-master配置文件
+        # vim /etc/salt/master +416
+        416 file_roots:        #告诉salt状态文件的位置
+        417   base:    #base为必须存在的，
+        418     - /srv/salt/base      #base状态对应的文件位置
+        说明：/etc/salt/master 配置文件的格式是采用YAML的格式写的，所以修改需要注意
+        每个缩进级别由两个空格组成，不支持tabs键，有下一个级别需要以冒号结尾，列表
+        用“-”减号开头，注意减号后面需要有一个空格。
+        创建/etc/salt/master配置文件里状态文件目录：
+        # mkdir /srv/salt/base
+        修改配置后重启salt-master：
+        # systemctl restart salt-master
+        重启后测试salt-master与salt-minion端的通讯
+        # salt 'linux-node1' test.ping
+        linux-node1:
+            True     #确定能成功通讯
+
+3、使用salt写一个自动化安装apache的状态并执行
+
+    # cd /srv/salt/base
+    # vim apache.sls      #状态文件的名字
+    apache-install:    #安装状态的ID声明
+      pkg.installed:    #pkg为状态模块，installed是pkg模块下的方法（即安装）
+        - name: httpd    #installed方法的参数，name是一个特殊的参数（安装的东西）
+    注：以上整个状态的意思为：{应该有一个httpd服务，如果有则啥也不干，如果没有则下载一个}
+
+    apache-service:    #服务状态的ID
+      service.running:   #service是状态模块，running是service模块下的方法（running即启动）
+        - name: httpd    #方法的目标参数（启动的目标）
+        - enable: True   #目标参数的动作（是否启动True则表示启动）
+    注：以上状态意思为{如果有httpd这个服务则启动httpd，如果没有httpd这个服务，就下载一个httpd并启动httpd}
+
+    执行这个apache状态：
+
+    [root@linux-node1 base]# salt 'linux-node1*' state.sls apache
+    linux-node1:      #minion端ID
+    ----------
+              ID: apache-install    #状态的ID
+        Function: pkg.installed     #模块.模块的方法
+            Name: httpd    #参数
+          Result: True     #True为成功
+         Comment: Package httpd is already installed.     #描述信息
+         Started: 22:25:05.529566     #启动时间
+        Duration: 1274.843 ms    #用了多少秒
+         Changes:      #如果下东西了会有输出
+    ----------
+              ID: apache-service
+        Function: service.running
+            Name: httpd
+          Result: True
+         Comment: Service httpd is already enabled, and is in the desired state
+         Started: 22:25:06.805143
+        Duration: 268.049 ms
+         Changes:   #都做了啥
+                  ----------
+                  httpd:
+                      True     #启动了httpd
+
+        Summary
+        ------------
+        Succeeded: 2    #成功了两个
+        Failed:    0
+        ------------
+        Total states run:     2
+
+        执行之后即可到目标服务器去查看apache的启动装了，或者使用salt查看目标服务器的apache状态
+
+        # salt "linux-node1" cmd.run "systemctl status httpd"     #在salt-master端用此命令查看apache启动状态
+        
+四、saltstack之安装tomcat
+    1、本次使用salt简单安装tomcat环境,下面是salt的安装tomcat状态实现
+        # cd /srv/salt/base/
+        # mkdir web     #创建一个web目录
+        # cd web/
+        # cat tomcat.sls        #安装java环境及tomcat的salt状态
+        jdk-install:       #状态ID
+          pkg.installed:       #需要有java-1.8.0的包，没有则安装，有则什么也不做
+            - name: java-1.8.0-openjdk
+
+        tomcat-install:       #状态ID
+          file.managed:       #file模块的方法
+            - name: /usr/local/src/apache-tomcat-8.0.46.tar.gz       #放到执行的salt-minion端的这个路径下
+            - source: salt://web/files/apache-tomcat-8.0.46.tar.gz     #将salt-master端的这个文件，这里的路径可以是http的路径或者是ftp的路径。
+            - user: root      #文件权限设置
+            - group: root
+            - mode: 755
+          cmd.run:    #状态里的执行命令的模块
+            - name: cd /usr/local/src && tar zxf apache-tomcat-8.0.46.tar.gz && mv apache-tomcat-8.0.46 /usr/local/ && ln -s /usr/local/apache-tomcat-8.0.46 /usr/local/tomcat
+            - unless: test -L /usr/local/tomcat && test -d /usr/local/apache-tomcat-8.0.46
+
+        # mkdir -p /srv/salt/base/web/files          #创建存放文件目录并长传文件bao包
+        # cd /srv/salt/base/web/files && ls
+        apache-tomcat-8.0.46.tar.gz
+      2.执行状态
+        # salt '*' state.sls web.tomcat           #多级目录通过.来调用，和python调用模块类似
+        
+  五、SaltStack基础(4) – 指定目标minions
+      指定目标服务器最简单的是使用minion ID。这个ID值是在minion的配置文件中设置，可以在bootstrap脚本中使用-i选项指定。
+        salt 'minion1' disk.usage
+    通配符
+    通配符可以用在minion的ID上：
+        salt 'minion*' disk.usage
+    指定目标的多种方法
+    在理想的环境中，你环境中的每个系统都有一个结构化的名称，告诉你需要了解的有关硬件，操作系统和系统角色的所有信息。在我们等待那个世界的同时，SaltStack提供了一个强大的定位系统，可以帮助你根据静态和自定义数据查找和过滤系统。
+    目标可以基于使用Grains系统得到的salt minion系统信息：
+        salt -G 'os:Ubuntu' test.ping
+    目标可以使用正则表达式过滤：
+        salt -E 'minion[0-9]' test.ping
+    目标可以是一个指定的列表：
+        salt -L 'minion1,minion2' test.ping
+    或者是多种目标类型连在一起：
+        salt -C 'G@os:Ubuntu and minion* or S@192.168.50.*' test.ping
+        
+  六、SaltStack配置管理(3) – INCLUDE
+      为了保持你的salt state模块化和可重用，每一个配置任务应该只在salt state树描述一次。如果你需要在多个地方使用同样的配置任务，你可以使用include指令。
+    include的使用很简单。在你的state文件的顶部（任何ID的外部），使用如下格式添加include:
+        include:
+          - sls1
+          - sls2
+    其中sls1和sls2是你想include的sls文件名称。注意不需要添加.sls后缀。
+    如果你想include的state文件在salt state树的子目录，可以使用小圆点(.)作为目录分隔符：
+        include:
+          - dir.sls1
+    include的state文件是插入到当前state文件的顶部，并且会首先处理。
+    示例
+    还记得之前下面的示例吗?
+        sync directory using lftp:
+          cmd.run:
+            - name: lftp -c "open -u {{ pillar['ftpusername'] }},{{ pillar['ftppassword'] }}
+                   -p 22 sftp://example.com;mirror -c -R /local /remote"
+    这个salt state依赖lftp命令，所以最好是创建另一个salt state来确保lftp已经安装。然后我们可以使用include来连接它们。
+    srv/salt/lftp.sls:
+        install lftp:
+          pkg.installed:
+            - name: lftp
+
+    srv/salt/dir-sync.sls:
+
+        include:
+          - lftp
+
+        sync directory using lftp:
+          cmd.run:
+            - name: lftp -c "open -u {{ pillar['ftpusername'] }},{{ pillar['ftppassword'] }}
+                   -p 22 sftp://example.com;mirror -c -R /local /remote"
+  
+  
+  
+  七、使用require声明salt state执行顺序
+      执行顺序
+
+    配置管理最重要的（和复杂的）方面之一是确保每个任务在正确的时间执行。
+    默认情况下，salt state文件中的每个ID是按在文件中出现的顺序来执行。此外，在Top文件中，每个salt state文件是在列表的顺序来应用。
+    例如下图中的ID是按salt state文件中在Top文件出现的次序来执行的。
+    saltstack-order-require-pic1
+    通过组织Top文件中Salt state出现的顺序，可以在不显式定义依赖性的情况下控制执行顺序。
+    require
+    require可以显性地指定salt state中ID的依赖。如果你添加一个声明指示id1依赖id4，那么就首先应用id4。
+    saltstack-order-require-pic2
+    你可以使用state.show_sls执行函数来查看salt state的执行顺序。例如：
+        salt 'minion1' state.show_sls sls1[,sls2,...]
+    查看examples.sls文件中salt state的执行顺序，使用如下命令：
+        salt 'minion1' state.show_sls examples
+    更多声明顺序方法
+    还有几个其它用来控制执行顺序的声明。你可以在这里找到https://docs.saltstack.com/en/latest/ref/states/requisites.html
+    
+    
+八、更换saltstack master服务器
+    1. 拷贝原来服务器的pki ,上传到要迁移的服务器服务器
+        [root@master salt]# tar -zcf pki.tar.gz pki/
+        [root@master salt]# ls
+        1.py  master  pki  pki.tar.gz
+    2.重启master服务（新服务器）
+        [root@bogon master]# /etc/init.d/salt-master restart
+        Stopping salt-master daemon:                               [确定]
+        Starting salt-master daemon:                                 [确定]
+    3.更改minion端配置文件
+        minion手动一台一台更改效率低
+        [root@minion salt]# vim /etc/salt/minion
+        master:ip地址改为要迁移的ip
+        批量更改：
+        在master端（旧）
+        [root@master salt]# salt '*' cmd.run "sed -i 's/128/131/' /etc/salt/minion"
+        minion1.lgl.com:
+        minion2.lgl.com:
+    4.验证
+        [root@master salt]# salt '*' cmd.run 'cat /etc/salt/minion | grep master'
+    5.重启master服务
+        [root@master salt]# salt '*' service.restart salt-minion
+        minion1.lgl.com:
+            True
+        minion2.lgl.com:
+            True
+            
+ 九、saltstack的state.sls和state.highstate之区别
+     saltstack的state.sls和state.highstate之区别
+        state.sls默认的运行环境是base环境，但是它并不读取top.sls（top.sls定义了运行环境以及需要运行的sls）。关于state.sls的官方文档说明如下：
+        salt.modules.state.sls(mods, saltenv='base', test=None, exclude=None, queue=False, env=None,**kwargs)
+        这里saltenv指的是运行环境，默认是base环境。
+        state.highstate: 这个是全局的所有环境，以及所有状态都生效。它会读取每一个环境的top.sls，并且对所有sls都生效。
+        我只有一个base环境，这个base环境下的top.sls文件内容如下：
+
+        base:
+          '*':
+            - backup
+            - monitor
+            - sysctr
+            - slowlog
+            - offline
+            - conf
+            - statistics
+            - test
+            - shell
+            - dbmsdba
+            - dba-tools
+
+    top.sls文件并没有定义 – sync_dbconf这个sls。但是在base环境定义的目录下：
+
+    file_roots:
+       base:
+         - /data/dbms/salt
+
+    也就是/data/dbms/salt目录下，定义了sync_dbconf.sls文件，该sls定义是为了向minion下发特定的文件。
+
+    1）、使用state.highstate的时候
+
+    /data1/Python-2.7.4/bin/salt 'minion_xxxx' state.highstate
+
+    可以发现并没有将sync_dbconf.sls定义的文件下发到minion端
+
+    2）、使用state.sls的时候
+
+    /data1/Python-2.7.4/bin/salt 'minion_xxxx' state.sls sync_dbconf
+
+    发现可以将sync_dbconf.sls定义的文件下发到minion端
+
+    以上说明：
+
+    1、state.highstate会读取所有环境（包括base环境）的top.sls文件，并且执行top.sls文件内容里面定义的sls文件，不在top.sls文件里面记录的sls则不会被执行；
+
+    2、state.sls默认读取base环境，但是它并不会读取top.sls文件。你可以指定state.sls执行哪个sls文件，只要这个sls文件在base环境下存在；
+
+    3、state.sls也可以指定读取哪个环境：state.sls salt_env=’prod’ xxxx.sls，这个xxxx.sls可以不在top.sls中记录。
+    
+ 十、saltstack/salt的state.sls和pillar定义以及使用
+         SLS（代表SaLt State文件）是Salt State系统的核心。SLS描述了系统的目标状态，由格式简单的数据构成。这经常被称作配置管理 首先，在master上面定义salt的主目录，默认是在/srv/salt/下面，vim /etc/salt/master：
+
+        file_roots:
+           base:
+             - /srv/salt
+           dev:
+            - /srv/salt-dev
+
+        然后，在/srv/salt下面创建top.sls文件(如果有的话，就不用创建了，直接编辑好了) vim top.sls
+
+        base:
+          '*':
+
+        top.sls 默认从 base 标签开始解析执行,下一级是操作的目标，可以通过正则，grain模块,或分组名,来进行匹配,再下一级是要执行的state文件
+
+        base:
+          '*':               #通过正则去匹配所有minion
+            - nginx          #这里都是我自己写的state.sls模块名 这里可以无视 后面会提到
+
+          my_app:             #通过分组名去进行匹配 必须要定义match:nodegroup
+            - match: nodegroup
+            - nginx
+
+          'os:Redhat':        #通过grains模块去匹配，必须要定义match:grain
+            - match: grain
+            - nginx
+
+        整个top.sls大概的格式就是这个样子，编写完top.sls后，编写state.sls文件；
+
+        cd /srv/salt 
+        vim nginx.sls
+
+        nginx.sls内容：
+
+        nginx:
+          pkg:               #定义使用（pkg state module）
+            - installed      #安装nginx（yum安装）
+          service.running:   #保持服务是启动状态
+            - enable: True
+            - reload: True
+            - require:
+              - file: /etc/init.d/nginx
+            - watch:                 #检测下面两个配置文件，有变动，立马执行上述/etc/init.d/nginx 命令reload操作
+              - file: /etc/nginx/nginx.conf
+              - file: /etc/nginx/fastcgi.conf
+              - pkg: nginx
+        /etc/nginx/nginx.conf:       #绝对路径
+          file.managed:
+            - source: salt://files/nginx/nginx.conf  #nginx.conf配置文件在salt上面的位置
+            - user: root
+            - mode: 644
+            - template: jinja   #salt使用jinja模块
+            - require:
+              - pkg: nginx
+
+        /etc/nginx/fastcgi.conf:
+          file.managed:
+            - source: salt://files/nginx/fastcgi.conf 
+            - user: root
+            - mode: 644
+            - require:
+              - pkg: nginx
+
+        在当前目录下面（salt的主目录）创建files/nginx/nginx.conf、files/nginx/fastcgi.conf文件，里面肯定是你自己项配置的nginx配置文件的内容啦；使用salt做自动化，一般nginx都是挺熟悉的，这里不做详细解释了
+
+        测试安装：
+
+        root@salt salt # salt 'sa10-003' state.sls nginx test=True
+        ··········这里省略输出信息
+        Summary
+        ------------
+        Succeeded: 8
+        Failed:    0
+        ------------
+        Total:     8
+
+        往minion上面进行推送的时候，一般salt ‘sa10-003’ state.sls nginx 这种命令；当然，也可以执行 salt sa10-003 state.highstate 这种命令会默认匹配所有的state.sls模块。其中test=True 是指测试安装 ，也就是不进行实际操作，只是查看测试效果。
+
+        state的逻辑关系列表：
+        include： 包含某个文件 比如我新建的一个my_webserver.sls文件内，就可以继承nginx和php相关模块配置，而不必重新编写
+
+        root@salt salt # cat my_webserver.sls 
+        include:
+          - nginx
+          - php
+
+        match: 配模某个模块，比如 之前定义top.sls时候的 match: grain match: nodegroup require： 依赖某个state，在运行此state前，先运行依赖的state，依赖可以有多个 比如文中的nginx模块内，相关的配置必须要先依赖nginx的安装
+
+        - require:
+          - pkg: nginx
+
+        watch： 在某个state变化时运行此模块，文中的配置，相关文件变化后，立即执行相应操作
+
+        - watch:
+          - file: /etc/nginx/nginx.conf
+          - file: /etc/nginx/fastcgi.conf
+          - pkg: nginx
+
+        order： 优先级比require和watch低，有order指定的state比没有order指定的优先级高，假如一个state模块内安装多个服务，或者其他依赖关系，可以使用
+
+        nginx:
+          pkg.installed:
+            - order:1
+
+        想让某个state最后一个运行，可以用last
+
+        Pillar是Salt非常重要的一个组件，它用于给特定的minion定义任何你需要的数据，这些数据可以被Salt的其他组件使用。这里可以看出Pillar的一个特点，Pillar数据是与特定minion关联的，也就是说每一个minion都只能看到自己的数据，所以Pillar可以用来传递敏感数据（在Salt的设计中，Pillar使用独立的加密session，也是为了保证敏感数据的安全性）。 另外还可以在Pillar中处理平台差异性，比如针对不同的操作系统设置软件包的名字，然后在State中引用等。
+        定义pillar数据
+
+        默认情况下，master配置文件中的所有数据都添加到Pillar中，且对所有minion可用。默认如下：
+
+        #pillar_opts: True
+
+        master上配置文件中定义pillar_roots，用来指定pillar的数据存储在哪个目录
+
+        pillar_roots:
+           base:
+            - /srv/salt/pillar
+
+        首先，和state系统一样，pillar也是需要一个top.sls文件作为一个入口，用来指定对象。
+
+        base:
+          '*':
+            - pillar #这里指定了一个pillar模块
+
+        pillar.sls文件：
+
+        ############IDC################
+        {% if grains['ip_interfaces'].get('eth0')[0].startswith('10.10') %}
+        nameservers: ['10.10.9.31','10.10.9.135']
+        zabbixserver: ['10.10.9.234']
+        {% else %}
+        nameservers: ['10.20.9.75']
+        zabbixserver: ['10.20.9.234']
+        {% endif %}
+
+        ######## nginx ########
+        ngx_home_dir: /var/cache/nginx
+
+        上文的IDC这块是我自己整理的通过ip来划分不同的nameserver等，这里只是放出来参考，在State文件中将可以引用Pillar数据，比如引用
+        ngx_home_dir:
+
+        nginx:
+          pkg:
+            - installed
+          user.present:
+            - home: {{ pillar['ngx_home_dir'] }}
+            - shell: /sbin/nologin
+            - require:
+              - group: nginx
+          group.present:
+            - require:
+              - pkg: nginx
+          service.running:
+            - enable: True
+            - reload: True
+            - require:
+              - file: /etc/init.d/nginx
+              - file: /data1/logs/nginx
+            - watch:
+              - file: {{ pillar['ngx_conf_dir'] }}/nginx.conf
+              - file: {{ pillar['ngx_conf_dir'] }}/fastcgi.conf
+              - pkg: nginx
+
+        ······ 后面关于配置就省略了
+
+        在pillar内可以提前将不同的部分根据在pillar内定义好，这样统一配置的时候就可以实现根据机器实际情况配置；比如根据机器的硬件情况配置nginx的worker_processes:
+
+        user nginx;
+        {% if grains['num_cpus'] < 8 %}
+        worker_processes {{ grains['num_cpus'] }};
+        {% else %}
+        worker_processes 8;
+        {% endif %}
+        worker_rlimit_nofile 65535;
+        ``````````具体配置省略
+
+        很多定义的时候，都可以使用到pillar来进行自定义相关数据，具体情况可以自行摸索，这里只是个举例。
+        
+  十一、SaltStack配置管理–状态间的关系
+          1、include的引用
+
+        需求场景：用于含有多个SLS的状态，使用include可以进行多个状态的组合
+
+        [root@linux-node1 prod]# pwd
+        /srv/salt/prod
+        [root@linux-node1 prod]# vim lamp.sls
+        include:
+          - apache.init
+          - php.init
+          - mysql.init
+        [root@linux-node1 prod]# vim ../base/top.sls 
+        prod:
+          'linux-node1.example.com':
+            - lamp
+        [root@linux-node1 prod]# salt -S "192.168.56.11" state.highstate
+        linux-node1.example.com:
+        ----------
+                  ID: apache-install
+            Function: pkg.installed
+                Name: httpd
+              Result: True
+             Comment: All specified packages are already installed
+             Started: 09:29:20.324067
+            Duration: 984.864 ms
+             Changes:   
+        ----------
+                  ID: apache-config
+            Function: file.managed
+                Name: /etc/httpd/conf/httpd.conf
+              Result: True
+             Comment: File /etc/httpd/conf/httpd.conf is in the correct state
+             Started: 09:29:21.311111
+            Duration: 50.95 ms
+             Changes:   
+        ----------
+                  ID: apache-service
+            Function: service.running
+                Name: httpd
+              Result: True
+             Comment: The service httpd is already running
+             Started: 09:29:21.362769
+            Duration: 52.404 ms
+             Changes:   
+        ----------
+                  ID: php-install
+            Function: pkg.installed
+              Result: True
+             Comment: All specified packages are already installed
+             Started: 09:29:21.415555
+            Duration: 0.693 ms
+             Changes:   
+        ----------
+                  ID: php-config
+            Function: file.managed
+                Name: /etc/php.ini
+              Result: True
+             Comment: File /etc/php.ini is in the correct state
+             Started: 09:29:21.416438
+            Duration: 15.578 ms
+             Changes:   
+        ----------
+                  ID: mysql-install
+            Function: pkg.installed
+              Result: True
+             Comment: All specified packages are already installed
+             Started: 09:29:21.432162
+            Duration: 0.542 ms
+             Changes:   
+        ----------
+                  ID: mysql-config
+            Function: file.managed
+                Name: /etc/my.cnf
+              Result: True
+             Comment: File /etc/my.cnf is in the correct state
+             Started: 09:29:21.432807
+            Duration: 38.858 ms
+             Changes:   
+        ----------
+                  ID: mysql-service
+            Function: service.running
+                Name: mariadb
+              Result: True
+             Comment: The service mariadb is already running
+             Started: 09:29:21.471799
+            Duration: 38.431 ms
+             Changes:   
+
+        Summary for linux-node1.example.com
+        ------------
+        Succeeded: 8
+        Failed:    0
+        ------------
+        Total states run:     8
+        Total run time:   1.182 s
+
+        2、extend的使用
+
+        需求场景：软件包安装的时候，需求假设：只在node1上按装php-mbstring包，其他的机器不安装。
+
+        [root@linux-node1 prod]# pwd
+        /srv/salt/prod
+        [root@linux-node1 prod]# vim lamp.sls 
+        include:
+          - apache.init
+          - php.init
+          - mysql.init
+
+        extend:
+          php-install:
+            pkg.installed:
+              - name: php-mbstring
+        [root@linux-node1 prod]# salt -S "192.168.56.11" state.highstate
+
+        3、require和require_in的使用
+
+        require：我依赖谁
+        require_in：我被谁依赖
+        需求场景：如果安装不成功或者配置httpd不成功，不启动httpd
+
+        （1）require使用
+        [root@linux-node1 apache]# pwd
+        /srv/salt/prod/apache
+        [root@linux-node1 apache]# systemctl stop httpd
+        [root@linux-node1 apache]# vim init_require.sls 
+        apache-install:
+          pkg.installed:
+            - name: httpd
+
+        apache-config:
+          file.managed:
+            - name: /etc/httpd/conf/httpd.conf
+            - source: salt://apache/files/httpd1.conf----->将此处的文件改错，模拟配置错误
+            - user: root
+            - group: root
+            - mode: 644
+
+        apache-service:
+          service.running:
+            - name: httpd
+            - enable: True
+            - require:---------------------------->使用require,表示依赖
+              - pkg: apache-install--------------->依赖的状态模块为pkg模块，id为apache-install
+              - file: apache-config--------------->依赖的状态模块为file模块，id为apache-config
+        [root@linux-node1 apache]# salt -S "192.168.56.11" state.highstate   #执行模块提示会有报错，此时httpd不会正常启动
+        ......
+        ----------
+                  ID: apache-config
+            Function: file.managed
+                Name: /etc/httpd/conf/httpd.conf
+              Result: False
+             Comment: Source file salt://apache/files/httpd1.conf not found
+             Started: 09:48:33.459243
+            Duration: 40.414 ms
+             Changes:   
+        ----------
+                  ID: apache-service
+            Function: service.running
+                Name: httpd
+              Result: False
+             Comment: One or more requisite failed: apache.init.apache-config
+             Changes:   
+        ----------
+        ......
+        Summary for linux-node1.example.com
+        ------------
+        Succeeded: 6
+        Failed:    2
+        ------------
+        Total states run:     8
+        Total run time:   1.110 s
+        [root@linux-node1 apache]# systemctl status httpd
+        ● httpd.service - The Apache HTTP Server
+           Loaded: loaded (/usr/lib/systemd/system/httpd.service; enabled; vendor preset: disabled)
+           Active: inactive (dead) since Sat 2018-01-20 09:44:04 CST; 4min 59s ago
+             Docs: man:httpd(8)
+                   man:apachectl(8)
+          Process: 65439 ExecStop=/bin/kill -WINCH ${MAINPID} (code=exited, status=0/SUCCESS)
+         Main PID: 1025 (code=exited, status=0/SUCCESS)
+           Status: "Total requests: 0; Current requests/sec: 0; Current traffic:   0 B/sec"
+
+        Jan 17 10:41:59 linux-node1 systemd[1]: Starting The Apache HTTP Server...
+        Jan 17 10:42:02 linux-node1 systemd[1]: Started The Apache HTTP Server.
+        Jan 18 03:49:02 linux-node1 systemd[1]: Reloaded The Apache HTTP Server.
+        Jan 20 09:43:53 linux-node1 systemd[1]: Stopping The Apache HTTP Server...
+        Jan 20 09:44:04 linux-node1 systemd[1]: Stopped The Apache HTTP Server.
+
+
+        （2）require_in使用
+        [root@linux-node1 apache]# vim init_require_in.sls 
+        apache-install:
+          pkg.installed:
+            - name: httpd
+            - require_in:------------------>被依赖
+              - service: apache-service---->被依赖的模块是service，id为apache-service
+
+        apache-config:
+          file.managed:
+            - name: /etc/httpd/conf/httpd.conf
+            - source: salt://apache/files/httpd.conf
+            - user: root
+            - group: root
+            - mode: 644
+            - require_in:
+              - service: apache-service
+
+        apache-service:
+          service.running:
+            - name: httpd
+            - enable: True
+
+        解释说明：require和require_in都能实现依赖的功能，主动和被动的关系不同
+
+        4、watch和watch_in的使用
+
+        需求场景：监控配置文件变动，重启服务或重载服务
+
+        [root@linux-node1 apache]# pwd
+        /srv/salt/prod/apache
+        [root@linux-node1 apache]# vim init_watch.sls 
+        apache-install:
+          pkg.installed:
+            - name: httpd
+
+        apache-config:
+          file.managed:
+            - name: /etc/httpd/conf/httpd.conf
+            - source: salt://apache/files/httpd.conf
+            - user: root
+            - group: root
+            - mode: 644
+
+        apache-service:
+          service.running:
+            - name: httpd
+            - enable: True
+            - watch:---------------------->使用watch
+              - file: apache-config------->监控的模块为file，id为apache-config
+        [root@linux-node1 apache]# vim files/httpd.conf   #随意修改配置文件
+        [root@linux-node1 apache]# salt -S "192.168.56.11" state.highstate
+        ......
+        ----------
+                  ID: apache-config
+            Function: file.managed
+                Name: /etc/httpd/conf/httpd.conf
+              Result: True
+             Comment: File /etc/httpd/conf/httpd.conf updated
+             Started: 10:07:14.430189
+            Duration: 55.133 ms
+             Changes:   
+                      ----------
+                      diff:
+                          --- 
+                          +++ 
+                          @@ -1,4 +1,5 @@
+                           #
+                          +#hahahaaha--------------->检测到配置文件增加的内容
+                           #hahahaaha
+                           # This is the main Apache HTTP server configuration file.  It contains the
+                           # configuration directives that give the server its instructions.
+        ----------
+                  ID: apache-service
+            Function: service.running
+                Name: httpd
+              Result: True
+             Comment: Service restarted---------------------->将服务重启
+             Started: 10:07:14.533852
+            Duration: 1219.798 ms
+             Changes:   
+                      ----------
+                      httpd:
+                          True
+        ......
+
+        #增加reload参数，让服务重载
+        [root@linux-node1 apache]# vim init_watch.sls 
+        apache-install:
+          pkg.installed:
+            - name: httpd
+
+        apache-config:
+          file.managed:
+            - name: /etc/httpd/conf/httpd.conf
+            - source: salt://apache/files/httpd.conf
+            - user: root
+            - group: root
+            - mode: 644
+
+        apache-service:
+          service.running:
+            - name: httpd
+            - enable: True
+            - reload: True----------------------------------->增加参数重载
+            - watch:
+              - file: apache-config
+
+        [root@linux-node1 apache]# salt -S "192.168.56.11" state.highstate
+        ----------
+                  ID: apache-config
+            Function: file.managed
+                Name: /etc/httpd/conf/httpd.conf
+              Result: True
+             Comment: File /etc/httpd/conf/httpd.conf updated------>检测文件有变化
+             Started: 10:10:08.493557
+            Duration: 53.016 ms
+             Changes:   
+                      ----------
+                      diff:
+                          --- 
+                          +++ 
+                          @@ -1,4 +1,5 @@
+                           #
+                          +#hahahaaha
+                           #hahahaaha
+                           #hahahaaha
+                           # This is the main Apache HTTP server configuration file.  It contains the
+        ----------
+                  ID: apache-service
+            Function: service.running
+                Name: httpd
+              Result: True
+             Comment: Service reloaded---------------->服务重载
+             Started: 10:10:08.596434
+            Duration: 158.753 ms
+             Changes:   
+                      ----------
+                      httpd:
+                          True
+        ----------
+        #watch_in的使用和require_in是一样的
+
+        5、unless：状态间的条件判断
+
+        需求场景：给apache的admin目录进行加密登陆查看
+
+        （1）修改配置文件，添加认证功能
+        [root@linux-node1 apache]# vim files/httpd.conf 
+        <Directory "/var/www/html/admin">
+                AllowOverride All
+                Order allow,deny
+                Allow from all
+                AuthType Basic
+                AuthName "haha"
+                AuthUserFile /etc/httpd/conf/htpasswd_file
+                Require user admin
+        </Directory>
+
+
+        （2）修改状态文件init.sls
+        [root@linux-node1 apache]# vim init.sls 
+        apache-install:
+          pkg.installed:
+            - name: httpd
+
+        apache-config:
+          file.managed:
+            - name: /etc/httpd/conf/httpd.conf
+            - source: salt://apache/files/httpd.conf
+            - user: root
+            - group: root
+            - mode: 644
+
+        apache-auth:
+          pkg.installed:
+            - name: httpd-tools
+          cmd.run:------>使用cmd模块的run方法
+            - name: htpasswd -bc /etc/httpd/conf/htpasswd_file admin admin---->生成密码文件
+            - unless: test -f /etc/httpd/conf/htpasswd_file---->unless判断条件，test -f判断为假则执行。即htpasswd文件如果不存在就执行生成密码
+
+        apache-service:
+          service.running:
+            - name: httpd
+            - enable: True
+            - reload: True
+            - watch:
+              - file: apache-config
+
+        [root@linux-node1 apache]# salt -S "192.168.56.11" state.highstate
+        ......
+        ----------
+                  ID: apache-auth
+            Function: cmd.run
+                Name: htpasswd -bc /etc/httpd/conf/htpasswd_file admin admin
+              Result: True
+             Comment: Command "htpasswd -bc /etc/httpd/conf/htpasswd_file admin admin" run
+             Started: 10:34:54.930867
+            Duration: 48.152 ms
+             Changes:   
+                      ----------
+                      pid:
+                          4166
+                      retcode:
+                          0
+                      stderr:
+                          Adding password for user admin
+                      stdout:
+        ----------
+                  ID: apache-service
+            Function: service.running
+                Name: httpd
+              Result: True
+             Comment: Service reloaded
+             Started: 10:34:55.014468
+            Duration: 162.844 ms
+             Changes:   
+                      ----------
+                      httpd:
+                          True
+        ......
+        浏览器访问192.168.56.11/admin/index.html会出现密码验证
+        
+        
+ 十二、saltstack mutilmaster的具体配置和实现
+     步骤：
+
+        创建一个master服务的备份节点
+        copy 主master节点的key到备节点
+        启用备master节点
+        重启minions
+        在备节点接受key
+
+    step1 -2:
+
+    默认的master的private key是在目录： /etc/salt/pki/master. 将该目录下的master.pem拷贝到备master节点的同一位置，对master的public key文件master.pub做同样的操作。
+
+    step3：
+
+    注意，一旦新的key被备份节点接受后，要进行安全的一些操作 。:
+    配置minions：
+
+    master:
+      - saltmaster1.example.com  #或者IP地址
+      - saltmaster2.example.com
+
+    配置完成后，minion将会核对主master和备master进行核对，并且两个master都对minion有操作权限。
+    注意：minion可以自动检测失败的master，并且尝试重连到一个更快的master，将minion端的参数master_alive_interval 设置为true，即可开启该功能。
+
+    在master之间共享文件：
+    salt本身在master之间没有共享文件的功能，共享能力需要考虑。
+    那么需要分别在每一个master节点上面进行手动接受key，才可以实现双节点的备份，这明显不方便。
+    但是也可以通过共享文件：/etc/salt/pki/master/{minions,minions_pre,minions_rejected}来实现。
+    file_roots:
+    共享文件如何共享呢，那么可以选择简单易用的gitfs，来同步多master之间的文件共享。
+    
+ 

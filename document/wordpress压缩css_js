@@ -1,0 +1,40 @@
+Autoptimize这是国外比较有名的WordPress优化插件
+
+    利用它能够轻易傻瓜化将网站css/js文件压缩合并并且生成缓存，这对提高WordPress访问速度是大大有利的；
+
+    好多复杂的主题模板，动不动就是加载了一大堆js文件，但又不想丢掉一些主题特效的用这个插件来优化自己的个人博客再为合适不过；
+
+Autoptimize特点
+
+    合并js/css
+    压缩缓存html
+    添加Expires Headers【网页缓存】
+
+Autoptimize设置说明
+
+    HTML：优化HTML代码：果断勾选，自动压缩HTML文件
+
+    Keep HTML comment？：是否保留HTML注释，根据需要选择，部分功能需要保留，例如Google Adsen
+
+    JavaScript：优化JavaScript代码：果断勾选
+
+    Force JavaScript in?：把JavaScript强制放在头部。一般来说，我们都提倡把JavaScript放在页面的底部，以此来加速网站。
+
+    但对于部分基于jQurey的WordPress主题来说，则会出现错位等的情况，一般不勾选。
+
+    只在中寻找脚本？：与Force JavaScript in选项配合使用，针对基于jQurey的
+    WordPress主题，以此来控制基于jQurey的WordPress主题缓存文件的过大的问题。
+
+    Exclude scripts from Autoptimize：排除名单，即不同时压缩的JavaScript文件。一般情况下保持默认即可。
+
+    添加异常处理环绕（try-catch wrapping)？：若压缩JavaScript代码的过程中，出现网站部分功能出错的问题，勾选此项能解决大部分问题。
+
+    优化CSS代码：同上，勾选 Generate data: URIs for images?：把CSS中包含的小图片（背景之类的）直接合并入CSS文件，而不是作为一个单独的图片。
+
+    勾选 Inline and Defer CSS?：合并和延迟CSS。此选项的意思是在网页刚开始加载的时候，只加载必要的CSS文件，其它部分延迟加载。
+
+    部分访问量大的WordPress站点，可勾选此项，减缓服务器压力，加快速度。
+
+    Inlining all CSS：合并所有CSS，此项可以提高访问量小的WordPress站点的加载速度，反之，访问量大的话，则会减慢速度，加大服务器负载！小站点勾选此项。
+
+    Exclude CSS from Autoptimize:排除的CSS文件。

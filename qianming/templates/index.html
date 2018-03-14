@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>个性签名</title>
+    <style>
+        div.wrapper {
+            border: 1px solid red;
+            height: 250px;
+            width: 550px;
+            background: green;
+            margin: auto;
+        }
+
+        div.form-div {
+            border: 1px solid red;
+            height: 50px;
+            width: 550px;
+            background: yellow;
+            margin: auto;
+        }
+
+        div.image-div {
+            border: 1px solid red;
+            height: 200px;
+            width: 550px;
+            background: blue;
+            margin: auto;
+        }
+    </style>
+</head>
+<body>
+<div class="wrapper">
+    <div class="form-div">
+        <form name="form1" id="form1" method="post">
+            名字:
+            <input name="word">
+            <select name="sizes" style="display:none;">
+                <option VALUE="60">60像素</OPTION>
+            </select>
+            样式:
+            <select name="fonts">
+                <option value="jfcs.ttf">个性签</option>
+                <option value="qmt.ttf">连笔签</option>
+                <option value="bzcs.ttf">潇洒签</option>
+                <option value="lfc.ttf">草体签</option>
+                <option value="haku.ttf">合文签</option>
+                <option value="zql.ttf">商务签</option>
+                <option value="yqk.ttf">可爱签</option>
+            </select>
+            <input name="fontcolor" style="display:none;" value="#000000">
+            <button >设计</button>
+        </form>
+    </div>
+    <div class="image-div">
+        <img src="{{ apath|default("http://www.uustv.com/1.gif") }}">
+    </div>
+</div>
+</body>
+</html>

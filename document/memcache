@@ -1,0 +1,523 @@
+一、php7.0编译memcached扩展
+  列表地址：http://pecl.php.net/package/memcached
+  源码包直接下载地址：http://pecl.php.net/get/memcached
+  此外还有一个git维护地址 https://github.com/php-memcached-dev/php-memcached
+  这个包最新版本是2017年11月份更新的，是支持php7.0的。
+  下载流程
+      git clone https://github.com/php-memcached-dev/php-memcached
+  或
+      wget http://pecl.php.net/get/memcached
+
+解压后将源码放入 /root 下或者 /home/用户目录下
+编译流程
+进入源码目录
+    #cd ~/php-memcached
+调用phpize(根据实际phpize路径)
+    #/usr/local/php7.0/bin/phpize
+configure目录
+    #./configure --with-php-config=/usr/local/php7.0/bin/php-config --with-zlib-dir
+编译 & 安装
+    #make && make install
+    tips
+因为memcached版本的扩展基于libmemcached,如果服务器上未安装,编译的时候会提示错误
+解决方案就是yum安装即可
+    yum install libmemcached
+    yum install libmemcached-devel
+成功
+打开 php安装目录/lib/php/extensions/no-debug-zts-*/即可看到memcached.so扩展
+然后再php.ini配置文件加载即可
+
+二、配置Memcached禁止公网访问
+1. 修改memcached配置文件，添加OPTIONS的-l 127.0.0.1参数
+    [root@iZbp include]# vim /etc/init.d/memcached
+     11 PORT=11211
+     12 USER=memcached
+     13 MAXCONN=1024
+     14 CACHESIZE=984
+     15 OPTIONS="-l 127.0.0.1"
+     16 DAEMON=/usr/local/memcached/bin/memcached
+重启memcached服务
+    [root@iZbp include]# service memcached restart
+    Stopping memcached:                                        [  OK  ]
+    Starting memcached:                                        [  OK  ]
+2. 配置防火规则，仅仅允许本机的tcp、udp访问memcached的11211端口，拦截外部访问
+accept规则
+
+    # iptables -A INPUT -p tcp -s 127.0.0.1 --dport 11211 -j ACCEPT
+    # iptables -A INPUT -p udp -s 127.0.0.1 --dport 11211 -j ACCEPT
+drop规则
+    # iptables -I INPUT -p tcp --dport 11211 -j DROP
+    # iptables -I INPUT -p udp --dport 11211 -j DROP
+保存规则并重启 iptables
+    # service iptables save
+    # service iptables restart
+3. 办公电脑本机cmd命令行测试是否可以远程访问：
+    telnet x.x.x.x 11211
+提示11211端口连接失败，则表示配置成功，Server禁止远程访问memcached。
+
+
+三、linux服务器下如何查看memcached的运行情况
+    查看memcached的运行情况有两种办法：
+    方法一、登录服务器通过命令查询
+    通过SSL登录服务器，在命令行输入：
+    echo stats | nc 127.0.0.1 11211
+    能看到如下内容：
+    重点关注两行数据即可：
+    STAT get_hits xxxx
+    命中了多少次缓存，也就是从 Memcached 缓存中成功获取数据的次数
+    STAT get_misses xxxx
+    没有命中的次数
+    方法二、使用memcached官方的探针
+    具体方法参见： https://www.liangshare.com/linux/8340.html
+    安装探针之后，访问探针页面，能看到如下信息：
+    
+    
+四、Linux – 将memcached注册为服务
+    1、编写脚本
+    编写脚本文件如下（memcached）：
+    #!/bin/sh
+    #
+    # memcached: Start/Stop/Restart memcached
+    # chkconfig: 35 33 84
+    # description: memcached server
+    MEMCACHED=/usr/local/bin/memcached
+    # memcached 分配的内存大小，单位M
+    MEMSIZE=128
+    USER=nobody
+
+    # memcached使用的端口
+    PORT01=11211
+    # 每个memcache 提供的最大连接数
+    MAXCONN=1024
+    # 每个memcache 的进程ID
+    PID01=/var/run/memcached/memcached$PORT01.pid
+    RETVAL=0
+    prog="memcached"
+
+    start() {
+             echo -n $"Starting $prog: "
+             $MEMCACHED -d -m $MEMSIZE -u $USER -p $PORT01 -c $MAXCONN -P $PID01
+         if [ $? -eq 0 ];then
+                echo "memcacheds$PORT01 servers is start ok..."
+             else
+                echo "memcacheds$PORT01 server not runing......"
+             fi
+
+            }
+
+    stop() {
+
+          for i in $PID01
+          do 
+           kill `cat $i`
+           rm -f $i
+               echo  $"Stopping $prog: "
+          done
+
+         }
+
+    # See how we were called.
+    case "$1" in
+    start)
+    start
+    ;;
+    stop)
+    stop
+    ;;
+    restart)
+    stop
+    start
+    ;;
+    *)
+    echo $"Usage: $0 {start|stop|restart}"
+    ;;
+    esac
+    exit $RETVAL
+
+    2、将其放入/etc/init.d/目录下
+
+    3、为文件赋予被执行的权限
+
+    chmod /etc/init.d/memcached
+
+    4、将memcached加入chkconfig管理列表
+
+    执行命令：
+
+    chkconfig --add memcached
+
+    chkconfig memcached on
+
+    5、启动memcached服务
+
+    service memcached start
+    
+    
+ 五、Memsniff：一款开源的memcached流量分析工具
+    Memsniff操作步骤
+
+    作为一款强大的、高效和可扩展的开源工具，memsniff的灵感来自于Etsy的mctop和Tumblr的memkeys。它可以在大量流量负载的情况下处理几乎所有的网络数据
+包（超过99.99%）。此外，它使用golang的简单多线程原语，并在不占用太多CPU或内存的情况下发挥高性能，具体参见下图：
+安装memsniff
+
+    memsniff使用了标准的 golang工具链（toolchain），这使得安装过程变得更为便捷。如果你已经安装了golang工具链，并设置了GOPATH环境变量，
+那么可以通过如下的命令来构建memsniff：
+    $ go get github.com/box/memsniff
+    $ go build github.com/box/memsniff
+使用memsniff
+memsniff需要超级用户权限来捕获大多数操作系统上的网络数据包，-i 参数是必备的，需要用它来指定网卡接口。使用示例：
+$ sudo memsniff -i eth0
+memsniff还具有从tcpdump的数据包转储文件中读取数据的能力。
+$ sudo memsniff -r eth0.pcap
+参见memsniff的GitHub主页，了解其他更多的命令行选项。
+
+六、Shell脚本监控并重启memcached进程
+    WEB服务器使用memcached，但是不知道为什么memcached老是挂掉（基本20分钟～50分钟左右），导致部分网站页面在访问的时候出错；
+定义日志后，查看日志也未能发现什么；初步判定由于之前更新libevent有关系。由于线上服务器，所以先用脚本来弥补下
+    #!/bin/sh 
+    pid=`ps aux|grep -v grep|grep memcached|awk '{print $2}'` 
+    memcached=`/usr/local/memcached/bin/memcached -u www &` 
+    nginx=`/usr/local/nginx/sbin/nginx -s reload &` 
+    if [ -z "$pid"] 
+    then 
+    echo $memcached 
+    echo $nginx 
+    fi
+    上面脚本主要温故2个知识点，一个是awk、一个是if的条件表达式；当然那些单引号、双引号、特殊单引号也是烦人的。只是一个基础脚本，很菜，不过可以实现我要的功能了，首先判断memcached进程是否存在，如果不存在则启动memcached和重载nginx。
+    最后加入到系统任务中，每隔5分钟判定一次：
+    */15 * * * * /root/memcached.sh
+
+七、memcached优化方法及应用场景
+    Memcached 的调优的目标
+        提高内存利用率,减少内存浪费。
+        提高命中率。
+    调优方法：
+        f参数:
+        factor增长因子,默认为1.25,曾经为2,值越小,slab中chunk size差距 越小,内存浪费越小。1.25适合缓存几百字节的对象。
+        建议:计算一下数据的预期平均长度,调整factor,以获得最恰当的设置。
+        n参数:chunk初始值
+        slab尾部剩余空间
+        解决办法:规划slab=chunk*n整数倍
+        slab中chunk利用率低:申请的slab只存放了一个Item
+        解决办法:规划slab=chunk
+        chunk存储Item浪费
+        如Item是100,存到128字节chunk,就有28字节浪费
+        解决办法:规划chunk=Item
+    Memcached 的限制
+        在Memcached中可以保存的item数据量是没有限制的,只要内存足够。
+        Memcached单进程最大使用内存为2G,要使用更多内存,可以分多个端口开启多
+        个Memcached进程。
+        Memcached设置Item为最大30天的过期时间,设置为永久的也会在这个时间过期,
+        常量REALTIME_MAXDELTA为606024*30控制。
+        Memcached本身是为缓存而设计的服务器,因此并没有过多考虑数据的永久性问
+        题,当内容容量达到指定值之后,就基于LRU(Least Recently Used)算法自动删
+        除不使用的缓存。
+        最大键长为250字节,大于该长度无法存储,单个item最大数据是1MB,超过1MB数据不予存储。
+    Memcached 的使用目的
+    通过缓存数据库查询结果,减少数据库访问次
+    数;还有就是缓存热点数据,以提高Web应用的速度、提高可扩展性。
+        缓存简单的查询结果:查询缓存存储了给定查询语句对应的整个结果集,最合适
+        缓存那些经常被用到,但不会改变的SQL语句对应查询到的结果集,比如载入特
+        定的过滤内容。
+        缓存简单的基于行的查询结果。
+        缓存的不只是SQL数据,可以缓存常用的热点数据,比如页面,以节省CPU时间使用分层的缓存。
+        特别注意:当数据更新时需要更新缓存。
+    Memcached 的典型使用场景
+        分布式应用。
+        数据库前段缓存。
+        服务器间数据共享。
+        变化频繁,查询频繁的数据,但是不一定写入数据库,比如:用户在线状态 。
+        变化不频繁,查询频繁,不管是否入库,都比较适合使用。
+    Memcached 不适合使用Memcached的场景
+    1: 变化频繁, 一变化就要入库类的应用,比如股票,金融。
+    2: 那些不需要“分布”的,不需要共享的,或者干脆规模小到只有一台服务器的应用,
+    memcached不会带来任何好处,相反还会拖慢系统效率,因为网络连接同样需要资源。
+    3: 缓存对象的大小大于1MB。
+    4: key的长度大于250字符。
+   
+   
+   
+  八、使用nginx ngx_http_memcached_module及memcached实现页面缓存
+      页面静态化是前端优化的一个重要方法，一般采用生成静态文件的方式实现。这里我尝试采用另外一种方式去实现，就是直接把页面用Memcached进行缓存，然后通过Nginx直接去访问。
+
+    采用Memcached缓存页面的好处是什么呢？
+
+        由于页面是缓存在内存里，所以减少了系统的I/O操作。
+        可以直接利用Memcached的分布式特性。
+        可以直接利用缓存的过期时间，方便对页面的过期时间进行处理。
+        部署简单，生成静态文件还需要考虑文件系统的问题。
+        当然缺点也很明显，首先是对内存的性能依赖很大，其次由于页面直接放内存里，一旦Memcached挂掉或者服务器重启，内存里存储的页面就会全部消失。
+
+    问题来了
+
+    Nginx内置了Memcached模块ngx_http_memcached_module，可以很轻松的实现对Memcached的访问。我这里做一个示例，通过PHP缓存我们邮轮网站的首页，然后通过URLhttp://dev.hwtrip.com/cache/index.html去访问这个页面。
+
+    首先，我们对Nginx进行配置:
+
+    server {
+        listen       80;
+        server_name  dev.hwtrip.com;
+
+        location ^~ /cache/ {
+            set            $memcached_key $request_uri;
+            memcached_pass 127.0.0.1:11211;
+        }
+
+        error_page     404 502 504 = @fallback;
+    }
+
+    location @fallback {
+        proxy_pass     http://backend;
+    }
+
+    这个配置把所有请求URI前缀为/cache/的访问用Memcached模块进行内容的读取，同时使用请求URI作为Memcached的key。当缓存没有命中或者出错时，我们使用@fallback进行处理（例如访问实际的应用并重新写入缓存），这个不在这里展开了。
+
+    然后，我们用简单的代码把页面写进Memcached里：
+
+
+    $htmlContent = file_get_contents('http://youlun.hwtrip.com');
+
+    $memcached = new Memcache();
+    $memcached->addServer('127.0.0.1', 11211);
+    $memcached->set('/cache/index.html', $htmlContent);
+
+    注意写缓存时的key，由于我们访问的URL是http://dev.hwtrip.com/cache/index.html，所以写进Memcached的key就是URI/cache/index.html。
+
+    执行完代码后，我们访问下http://dev.hwtrip.com/cache/index.html：
+
+    可以看到，通过nginx很容易实现对Memcached进行访问，但是这离我们缓存页面的目标还差很多，因为有两个大问题还没有解决。
+
+        首先，我们没有用到Memcached的分布式，我们上面的示例只是对一个Memcached的节点进行访问。
+        其次，通过这种方式返回的页面的没有携带浏览器缓存相关的响应头。没有这些响应头，页面就不能缓存在浏览器了，会导致每次访问都会去请求服务器。
+
+    使Ngxin支持Memcached的分布式访问
+
+    Nginx可以通过upstream支持访问多个Memcached服务节点：
+
+
+    upstream memcached {
+        server 127.0.0.1:11211;
+        server 127.0.0.1:11212;
+        server 127.0.0.1:11213;
+        server 127.0.0.1:11214;
+    }
+
+    server {
+        listen       80;
+        server_name  dev.hwtrip.com;
+
+        location ^~ /cache/ {
+            set            $memcached_key $request_uri;
+            memcached_pass memcached;
+        }
+
+        error_page     404 502 504 = @fallback;
+    }
+
+    ......
+
+    但是，upstream采用的是round-robin的轮询方式，而我们知道PHP的php_memcache扩展使用的是一致性哈希算法进行Memcached服务节点的选择。于是乎，我们在前端用PHP缓存的页面，通过nginx不一定能访问到。所以我们必须让Nginx也能通过一致性哈希算法去选择节点。
+
+    这里我们用到了ngx_http_upstream_consistent_hash这个第三方模块，这个模块实现了跟php_memcache这个PHP扩展一样的一致性哈希算法。
+
+    重新编译Nginx，添加好这个模块，我们修改下Nginx的配置文件的upstream部分：
+
+    upstream memcached {
+        consistent_hash $request_uri;
+        server 127.0.0.1:11211;
+        server 127.0.0.1:11212;
+        server 127.0.0.1:11213;
+        server 127.0.0.1:11214;
+    }
+
+    ......
+
+    我们修改下缓存页面的示例PHP代码：
+
+    $htmlContent = file_get_contents('http://youlun.hwtrip.com');
+
+    $memcached = new Memcache();
+    $memcached->addServer('127.0.0.1', 11211);
+    $memcached->addServer('127.0.0.1', 11212);
+    $memcached->addServer('127.0.0.1', 11213);
+    $memcached->addServer('127.0.0.1', 11214);
+
+    for ($i = 1; $i < 10; $i ++) { 
+        $cacheIns->set("/cache/index$i.html", $htmlContent);
+    }
+
+    通过设置不同的key，我们测试下Nginx是否能获取到正确的内容。经测试，PHP设置的缓存，用Nginx都能正常访问到。
+    返回浏览器可缓存的页面
+
+    这是第一个例子里Nginx返回的页面的响应头：
+
+    可以看到没有返回任何缓存相关的响应头，这样每次访问，浏览器都会去请求服务器，虽然服务器有缓存，但明显不符合我们对性能优化的追求。不过就算Nginx返回了相关的响应头，然后我们请求的时候包含了If-Modified-Since这个请求头，Ngxin的memcached模块也不会去判断这个请求有没有过期以及返回304 Not Modified。所以我们需要实现两件事，第一是能让Ngxin返回正确的响应头，第二是能让Nginx判断请求的资源是否过期，并正确返回响应码。
+
+    这里，我们借助另外一个Nginx的第三方模块：gx_http_enhanced_memcached_module。这个模块提供了很多功能，大家可以到它的github页面上了解。这里我们主要用到它的两个功能：
+
+        Send custom http headers, like Content-Type, Last-Modified. Http headers are stored in memcached, with your body data.
+        Reply 304 Not Modified for request with If-Modified-Since headers and content with Last-Modified in cache
+        再次重新编译安装Nginx，添加好gx_http_enhanced_memcached_module模块，我们再次对Nginx的配置文件进行修改：
+
+    upstream memcached {
+        consistent_hash $request_uri;
+        server 127.0.0.1:11211;
+        server 127.0.0.1:11212;
+        server 127.0.0.1:11213;
+        server 127.0.0.1:11214;
+    }
+
+    server {
+        listen       80;
+        server_name  dev.hwtrip.com;
+
+        location ^~ /cache/ {
+            set                     $enhanced_memcached_key $request_uri;
+            enhanced_memcached_pass memcached;
+        }
+
+        error_page     404 502 504 = @fallback;
+    }
+
+    ......
+
+    我们再次修改示例PHP文件：
+
+    $htmlContent = file_get_contents('http://youlun.hwtrip.com');
+
+    // 页面过期时间
+    $expiresTime = 60 * 5;
+
+    // Last-Modified头设置的时间
+    $lastModified = gmdate('D, d M Y H:i:s \G\M\T', time());
+
+    // Expires头设置的时间
+    $expires = gmdate('D, d M Y H:i:s \G\M\T', time() + $expiresTime);
+
+    // 最终缓存的内容
+    $cacheContent = "EXTRACT_HEADERS
+    Content-Type: text/html
+    Cache-Control:max-age=$expiresTime
+    Expires:$expires
+    Last-Modified:$lastModified
+
+    $htmlContent";
+
+    // 获取memcache实例
+    $memcached = new Memcache();
+    $memcached->addServer('127.0.0.1', 11211);
+    $memcached->addServer('127.0.0.1', 11212);
+    $memcached->addServer('127.0.0.1', 11213);
+    $memcached->addServer('127.0.0.1', 11214);
+
+    // 写入缓存
+    $memcached->set('/cache/index.html', $cacheContent, $expiresTime);
+
+    这次我们设置了缓存的过期时间，并在缓存内容前面添加了一些响应头。ngx_http_enhanced_memcached_module模块EXTRACT_HEADERS这个标记去识别并记录响应头，详情请看github页面的说明。
+
+    重新写入缓存后，我们再次访问页面：
+
+    可以看到缓存相关的响应头都已正确返回。
+    
+    十、Nginx使用教程(八)：使用Nginx缓存之Memcached缓存
+        使用Memcache
+        Memcache是一个通用的内存缓存系统。 它通常用于加速缓慢的数据访问。 NGINX memcached模块提供各种指令，可以配置为直接访问Memcache提供内容，从而避免对上游服务器的请求。
+    除了指令之外，模块还创建$ memcached_key变量，用于执行高速缓存查找。 在使用Memcache查找之前，必须在$memcached_key变量中设置一个值，该变量根据请求URL确定。
+    memcached_pass
+    此指令用于指定memcached服务器的位置。 地址可以通过以下任意方式指定：
+    •域名或IP地址，以及可选端口
+    •使用带unix：前缀的的Unix域套接字
+    •使用NGINX upstream指令创建的一组服务器
+    该指令仅在NGINX配置的location和location if中使用。 如下例子：
+
+        location /myloc/{
+           set $memached_key $uri;
+           memcached_pass localhost:11211;
+           }
+
+    memcached_connect_timeout / memcached_ send_timeout / memcached_read_timeout
+
+
+    memcached connect_timeout指令设置在NGINX和memcached服务器之间建立连接的超时。
+    memcached_send_timeout指令设置将请求写入memcached服务器的超时。 memcached_read_timeout指令设置从memcached服务器读取响应的超时。
+    所有指令的默认值为60秒，可在NGINX配置的http，server和location区块下使用。 如下例子：
+
+        http{
+           memcached_send_timeout 30s;
+           memcached_connect_timeout 30s;
+           memcached_read_timeout 30s;
+           }
+
+    memcached_bind
+
+
+    此指令指定服务器的哪个IP与memcached连接，默认为关闭，即不指定，那么Nginx会自动选择服务器的一个IP用来连接。
+    完整示例
+
+        server{
+           location /python/css/ {
+           alias "/code/location/css/";
+           }
+           location /python/ {
+           set $memcached_key "$request_method$request_uri";
+           charset utf-8;
+           memcached_pass 127.0.0.1:11211;
+           error_page 404 502 504 = @pythonfallback;
+           default_type text/html;
+           }
+           location @pythonfallback {
+           rewrite ^/python/(.*) /$1 break;
+
+           proxy_pass http://127.0.0.1:5000;
+           proxy_set_header X-Cache-Key "$request_method$request_uri";
+           }
+           # Rest NGINX configuration omitted for brevity
+        }
+        
+  十一、memcached数据库简单配置介绍
+            一、memcached数据库
+
+    （基于内存的储存方式；默认端口11211）
+
+    1、装包yum -y install memcached telnet (telnet是一款远程访问工具，mem软件无客户端，所以需安装telnet连接服务器)
+
+    2、启服务：systemctl restart memcached.server
+    查看端口是否启用：netstat -antpu | grep mem
+
+    3、查看配置文件(默认不需要修改)：vim /etc/sysconfig/memcached
+
+    4、连接数据库验证是否可用：telnet 127.0.0.1 11211 （测试环境使用的工具）
+
+    set name 0 180 3 添加一个数据
+    get name 查看添加的数据
+
+        0代表数据不压缩
+        180数据在内存里只存180秒
+        3代表存3个字符的数据
+
+    5、安装php和数据库关联的软件
+
+    正常情况下，数据库要和php脚本关联起来，php软件包并不具备关联功能，需要手动安装；
+
+    软件包可以通过搜索查看：yum list | grep memcached
+
+    yum -y install php-pecl-memcache (安装可以关联mem数据库的软件)
+
+    开启次服务systemctl restart php-fpm
+
+    6、之前做过nginx的动静分离，现在可以直接放一个php的页面到html下面直接访问；
+    二、基于java的web集群指定共用数据库
+
+    1、这个环境需要在两个web服务器上配置，先cp软件
+    需要先安装一个jave关联memcached的软件，这个软件只需要在lnmp中cp相应文件即可实现；
+
+    cd lnmp_soft/session
+    cp *jar /usr/local/tomcat/lib （关联软件的相关包）
+    cp context.xml /usr/local/tomcat/conf/ （配置文件）
+
+    2、修改配置文件vim /usr/local/tomcat/conf/context.xml
+    只需要修改36行的配置，写入我们web集群共用的memcached数据库的ip地址
+
+    3、重启web服务；启动数据库
+    
+   

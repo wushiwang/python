@@ -1,0 +1,389 @@
+gbm包
+（1）calibrate.plot
+实验诊断工具,画出拟合值与实际的平均值。目前只开发分布=“伯努利”。
+Usage
+calibrate.plot(y,p,                               #y为0-1类型
+distribution="bernoulli",                       #只能为该类型
+replace=TRUE,                              #决定是否取代当前图，用于几种方法的比较
+line.par=list(col="black"),                     #
+shade.col="lightyellow",
+shade.density=NULL,
+rug.par=list(side=1),
+xlab="Predicted value",
+ylab="Observed average",
+xlim=NULL,
+ylim=NULL,
+knots=NULL,
+df=6,...)
+Examples
+# Don't want R CMD check to think there is a dependency on rpart
+# so comment out the example
+#library(rpart)
+#data(kyphosis)
+#y <- as.numeric(kyphosis$Kyphosis)-1
+#x <- kyphosis$Age
+#glm1 <- glm(y~poly(x,2),family=binomial)
+#p <- predict(glm1,type="response")
+#calibrate.plot(y, p, xlim=c(0,0.6), ylim=c(0,0.6))
+
+（2）gbm
+gbm(
+formula = formula(data),
+distribution = "bernoulli",
+data = list(),
+weights,
+var.monotone = NULL,
+n.trees = 100,
+interaction.depth = 1,
+n.minobsinnode = 10,              #树末端节点最小拥有的数量
+shrinkage = 0.001,                #树的学习速度
+bag.fraction = 0.5,
+train.fraction = 1.0,
+cv.folds=0,                      #计算交叉验证次数
+keep.data = TRUE,
+verbose = "CV",
+class.stratify.cv=NULL,
+n.cores = NULL                   #CPU使用数量
+)
+
+gbm.fit(x, y,
+offset = NULL,
+misc = NULL,
+distribution = "bernoulli",
+w = NULL,                   #跟y同长的权重向量
+var.monotone = NULL,
+n.trees = 100,                #迭代次数
+interaction.depth = 1,          #
+n.minobsinnode = 10,
+shrinkage = 0.001,
+bag.fraction = 0.5,
+nTrain = NULL,
+train.fraction = NULL,
+keep.data = TRUE,               
+verbose = TRUE,                #如果这是真的,gbm将打印出的进步和性能指标。
+var.names = NULL,              #包含预测变量与x同长的字符串向量
+response.name = "y",             #因变量的字符串标签
+group = NULL
+)
+
+gbm.more(object,
+n.new.trees = 100,
+data = NULL,
+weights = NULL,
+offset = NULL,
+verbose = NULL
+)
+（3）summary.gbm
+计算每个变量的相对影响
+summary(object,                          #gbm对象
+cBars=length(object$var.names), 
+n.trees=object$n.trees,                   #用于生成图形所用树的数量
+plotit=TRUE,                          #一个是否生成图的指示器
+order=TRUE,                          #指示是否绘制和/或返回相对影响的指标排序
+method=relative.influence,
+normalize=TRUE,
+...)
+（4）shrink.gbm.pred
+shrink.gbm.pred(object,
+newdata,                                     #用于预测的数据集
+n.trees,
+lambda = rep(1, length(object$var.names)),
+...)
+（5）shrink.gbm
+Performs recursive shrinkage in each of the trees in a GBM fit using different shrinkage parameters for each variable
+shrink.gbm(object,
+n.trees,
+lambda = rep(10, length(object$var.names)),
+...)
+（6）pretty.gbm.tree
+根据树的索引展示树的相关信息
+pretty.gbm.tree(object, i.tree = 1)
+（7）predict.gbm
+predict(object,
+newdata,
+n.trees,
+type="link",
+single.tree=FALSE,
+...)
+（8）gbm.perf
+评价树的最佳个数
+gbm.perf(object,
+plot.it = TRUE,
+oobag.curve = FALSE,
+overlay = TRUE,
+method
+)
+
+
+例子
+Examples
+# A least squares regression example # create some data
+N <- 1000
+X1 <- runif(N)
+X2 <- 2*runif(N)
+X3 <- ordered(sample(letters[1:4],N,replace=TRUE),levels=letters[4:1])
+X4 <- factor(sample(letters[1:6],N,replace=TRUE))
+X5 <- factor(sample(letters[1:3],N,replace=TRUE))
+X6 <- 3*runif(N)
+mu <- c(-1,0,1,2)[as.numeric(X3)]
+SNR <- 10 # signal-to-noise ratio
+Y <- X1**1.5 + 2 * (X2**.5) + mu
+sigma <- sqrt(var(Y)/SNR)
+Y <- Y + rnorm(N,0,sigma)
+# introduce some missing values
+X1[sample(1:N,size=500)] <- NA
+X4[sample(1:N,size=300)] <- NA
+data <- data.frame(Y=Y,X1=X1,X2=X2,X3=X3,X4=X4,X5=X5,X6=X6)
+# fit initial model
+gbm1 <-
+gbm(Y~X1+X2+X3+X4+X5+X6, 	# formula
+data=data, 	# dataset
+var.monotone=c(0,0,0,0,0,0),	# -1: monotone decrease, +1: monotone increase, 0: no monotone restrictions
+shrinkage=0.05,	# shrinkage or learning rate, 0.001 to 0.1 usually work
+distribution="gaussian", 	# see the help for other choices
+n.trees=1000, 	# number of trees
+interaction.depth=3, 	# 1: additive model, 2: two-way interactions, etc.
+bag.fraction = 0.5, 	# subsampling fraction, 0.5 is probably best
+train.fraction = 0.5, 	# fraction of data for training, # first train.fraction*N used for training
+n.minobsinnode = 10,	# minimum total weight needed in each node
+cv.folds = 3,	# do 3-fold cross-validation
+keep.data=TRUE,	# keep a copy of the dataset with the object
+verbose=FALSE,	# don't print out progress
+n.cores=1)	# use only a single core (detecting #cores is error-prone, so avoided here)
+# check performance using an out-of-bag estimator
+# OOB underestimates the optimal number of iterations
+best.iter <- gbm.perf(gbm1,method="OOB")
+print(best.iter)
+# check performance using a 50% heldout test set
+best.iter <- gbm.perf(gbm1,method="test")
+print(best.iter)
+# check performance using 5-fold cross-validation
+best.iter <- gbm.perf(gbm1,method="cv")
+print(best.iter)
+# plot the performance # plot variable influence
+summary(gbm1,n.trees=1) # based on the first tree
+summary(gbm1,n.trees=best.iter) # based on the estimated best number of trees
+# compactly print the first and last trees for curiosity
+print(pretty.gbm.tree(gbm1,1))
+print(pretty.gbm.tree(gbm1,gbm1$n.trees))
+# make some new data
+N <- 1000
+X1 <- runif(N)
+X2 <- 2*runif(N)
+X3 <- ordered(sample(letters[1:4],N,replace=TRUE))
+X4 <- factor(sample(letters[1:6],N,replace=TRUE))
+X5 <- factor(sample(letters[1:3],N,replace=TRUE))
+X6 <- 3*runif(N)
+mu <- c(-1,0,1,2)[as.numeric(X3)]
+Y <- X1**1.5 + 2 * (X2**.5) + mu + rnorm(N,0,sigma)
+data2 <- data.frame(Y=Y,X1=X1,X2=X2,X3=X3,X4=X4,X5=X5,X6=X6)
+# predict on the new data using "best" number of trees
+# f.predict generally will be on the canonical scale (logit,log,etc.)
+f.predict <- predict(gbm1,data2,best.iter)
+# least squares error
+print(sum((data2$Y-f.predict)^2))
+# create marginal plots
+# plot variable X1,X2,X3 after "best" iterations
+par(mfrow=c(1,3))
+plot(gbm1,1,best.iter)
+plot(gbm1,2,best.iter)
+plot(gbm1,3,best.iter)
+par(mfrow=c(1,1))
+# contour plot of variables 1 and 2 after "best" iterations
+plot(gbm1,1:2,best.iter)
+# lattice plot of variables 2 and 3
+plot(gbm1,2:3,best.iter)
+# lattice plot of variables 3 and 4
+plot(gbm1,3:4,best.iter)
+# 3-way plots
+plot(gbm1,c(1,2,6),best.iter,cont=20)
+plot(gbm1,1:3,best.iter)
+plot(gbm1,2:4,best.iter)
+plot(gbm1,3:5,best.iter)
+# do another 100 iterations
+gbm2 <- gbm.more(gbm1,100,
+verbose=FALSE) # stop printing detailed progress
+
+
+基本包
+（1）append
+向向量中添加元素
+append(x, values, after = length(x))
+Arguments.
+x	the vector to be modified
+values 	to be included in the modified vector.
+after 	a subscript, after which the values are to be appended.
+
+> append(1:5, 0:1, after = 3)
+[1] 1 2 3 0 1 4 5
+
+（2）apply
+apply函数经常用来计算矩阵中行或列的均值、和值的函数
+apply(b,1,sum)
+第一个参数是指要参与计算的矩阵；
+第二个参数是指按行计算还是按列计算，1——表示按行计算，2——按列计算；
+第三个参数是指具体的运算参数
+myfun <- function(x){
+  sum(x^2)
+}
+apply(b,1,myfun)
+
+（3）args
+呈现命令的参数
+args（ls）
+
+（4）类型转换函数
+1、判断数据类型
+is.numeric()    是否数值型数据
+is.character()   是否字符型数据 
+is.vector()    是否向量数据
+is.matrix()    是否矩阵数据
+is.data.frame()   是否数据框数据
+is.factor()       是否因子数据
+is.logical()      是否逻辑型数据
+2、转换数据类型
+as.numeric()
+as.character()
+as.vector()
+as.matrix()
+as.data.frame()
+as.factor()
+as.logical()
+
+（5）数据合并
+1.merge函数
+两个数据框拥有相同的时间或观测值，但这些列却不尽相同。处理的办法就是使用
+merge(x, y ,by.x = ,by.y = ,all = ) 函数。
+#merge／合并
+ID<-c(1,2,3,4)
+name<-c("A","B","C","D")
+score<-c(60,70,80,90)
+student1<-data.frame(ID,name)
+student2<-data.frame(ID,score)
+total_student1<-merge(student1,student2,by="ID")
+total_student1
+当我们需要将相同的观测对象得出的不同类型变量合并时，则采用cbind，也就是合并columm。
+2.cbind函数／横向追加
+ID<-c(1,2,3,4)
+name<-c("A","B","C","D")
+score<-c(60,70,80,90)
+sex<-c("M","F","M","M")
+student1<-data.frame(ID,name)
+student2<-data.frame(score,sex)
+total_student2<-cbind(student1,student2)
+total_student2
+ 当我们需要将不同的观测对象，相同的观测变量合并时，则采用rbind，也就是合并row。
+3.rbind函数／纵向追加
+ID<-c(1,2,3,4)
+name<-c("A","B","C","D")
+student1<-data.frame(ID,name)
+ID<-c(5,6,7,8)
+name<-c("E","F","G","H")
+student2<-data.frame(ID,name)
+total_student3<-rbind(student1,student2)
+total_student3
+
+（6）字符串替换、大小写转化
+chartr(old, new, x)
+tolower(x)
+toupper(x)
+casefold(x, upper = FALSE)
+
+（6）工作路径
+getwd()
+setwd(dir)
+
+（7）names
+（8）nrow
+nrow(x)
+ncol(x)
+NCOL(x)
+NROW(x)
+（9）paste
+paste (..., sep = " ", collapse = NULL)
+paste0(..., collapse = NULL)
+（10）readLines
+readLines(con = stdin(), n = -1L, ok = TRUE, warn = TRUE,encoding = "unknown", skipNul = FALSE)
+（11）rep
+
+（12）sample
+（13）scan
+（14）scale
+（15）table
+（16）typeof
+（17）which
+（18）with
+（19）write
+write(x, file = "data",ncolumns = if(is.character(x)) 1 else 5,append = FALSE, sep = " ")
+（20）时间序列相关包及函数
+1.时间序列分解
+	decompose()
+decompose(x, type = c("additive", "multiplicative"), filter = NULL)
+# decompose 的 用 法
+r <- decompose(co2)
+plot(r) # 绘 制 原 始 数 据, trend, seasonal, 噪 声 4个 图
+	stl()
+# stl 的 用 法
+s <- stl(co2, s.window="periodic")
+r <- stl(co2, s.window="periodic")$time.series
+> names(s)
+[1] "time.series" "weights" "call" "win" "deg"
+[6] "jump" "inner" "outer"
+plot(s) # 绘 制 原 始 数 据, trend, seasonal, 噪 声 4个 图
+	HoltWinters 分解
+data(LakeHuron)
+x <- LakeHuron
+before <- window(x, end=1935) # 1935年 之 前 的 数 据
+after <- window(x, start=1935) # 1935之 后 的 数 据
+# 优 化 的 初 始 值
+a <- .2
+b <- 0
+g <- 0
+model <- HoltWinters(
+before,
+alpha=a, beta=b, gamma=g)
+# 对1935年 后 的37年 预 测
+forecast <- predict(
+model,
+n.ahead=37,
+prediction.interval=T)
+# 绘 图.
+plot(model, predicted.values=forecast,
+main="Holt-Winters filtering: constant model")
+lines(after)
+
+（21）e1071包——贝叶斯分类
+naiveBayes
+
+## S3 method for class 'formula'
+naiveBayes(formula, data, laplace = 0, ..., subset, na.action = na.pass)
+## Default S3 method:
+naiveBayes(x, y, laplace = 0, ...)
+## S3 method for class 'naiveBayes'
+predict(object, newdata,type = c("class", "raw"), threshold = 0.001, eps = 0, ...)
+
+## Categorical data only:
+data(HouseVotes84, package = "mlbench")
+model <- naiveBayes(Class ~ ., data = HouseVotes84)
+predict(model, HouseVotes84[1:10,])
+predict(model, HouseVotes84[1:10,], type = "raw")
+pred <- predict(model, HouseVotes84)
+table(pred, HouseVotes84$Class)
+## using laplace smoothing:
+model <- naiveBayes(Class ~ ., data = HouseVotes84, laplace = 3)
+pred <- predict(model, HouseVotes84[,-1])
+table(pred, HouseVotes84$Class)
+## Example of using a contingency table:
+data(Titanic)
+m <- naiveBayes(Survived ~ ., data = Titanic)
+m
+predict(m, as.data.frame(Titanic))
+## Example with metric predictors:
+data(iris)
+m <- naiveBayes(Species ~ ., data = iris)
+## alternatively:
+m <- naiveBayes(iris[,-5], iris[,5])
+m
+table(predict(m, iris), iris[,5])
+
+

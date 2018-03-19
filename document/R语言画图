@@ -1,0 +1,386 @@
+一.画热图
+1.heatmap()
+heatmap(temp,col=colorRampPalette(c("green","black","red"))(12),ColSideColors=colorRampPalette(c("green","black","red"))(12),Colv=NA,cexRow=0.8,cexCol=1.2)
+
+Col指定热图所用颜色：
+ColSideColors/RowSideColors代表列、行边是否显示颜色bar
+ColV/RowV表示是否按照列/行聚类，默认均为真值
+cexCol/cexRow分别表示列/行标签字体大小
+scale=c("row","column","none")#设置是否归一化
+margins=c(5,5)#设置热图下方及右方宽度
+若热图中对于样本有多种分组，需要在行/列帝显示两行或多行颜色bar，可选择heatmap.plus或pheatmap包
+
+2. pheatmap包
+cellwidth、cellheigh t#小方格宽度、高度
+scale="none" ##是否归一化
+cluster_rows、cluster_cols #是否按行、列聚类
+treeheight_row、treeheight_col #横向、纵向树高度
+legend、annotation（设置分组）等高级选项见后面
+display_numbers=TRUE #在小方格中显示数字
+
+
+3. gplots包（heatmap.2）
+4. ggplot2包
+（可对热图进行聚类，但不可画树）
+所需包ggplot2、reshape2
+library("ggplot2")
+library("reshape2")
+##首先分别对数据temp在行/列方向上聚类，并保存聚类后的行列顺序
+hc=hclust(dist(temp))
+row_order=hc$order
+temp1=temp[row_order,] ###是否对行列进行聚类
+temp1=melt(temp1) ###数据变换，从matrix到ggplot可以识别的类型
+p<-ggplot(temp1,aes(x=Var2,y=Var1,fill=value))+ #指定横纵坐标、填充值
+xlab("")+ylab("")+labs(title="")+geom_tile(colour="white",size=0)+scale_fill_grandient(low="green",high="red")+ ###定义填充颜色
+geom_text(aes(label=round(value,2)),angel=45,size=3) ###加数字
+print(p)
+
+library(reshape2)
+library(ggplot2)
+mat = matrix(rnorm(20),5)
+m = melt(mat)
+g = ggplot(m, aes(x=Var1, y=Var2, fill=value))+xlab('X-labels')+ylab("Y-labels")+opts(title="Heatmap Example")
+g1=g+geom_tile(); print(g1)
+g2=g1+geom_tile(color="white", size=0.1); print(g2)
+#设置每个方格边框颜色（color=‘white’）和边框线的大小（size=0.1）
+g3=g2+scale_fill_gradient(low='green', high='red');print(g3)
+g4=g3+guides(fill=FALSE);print(g4) # Remove legend
+g5=g4+geom_text(aes(label=value), angle=45);print(g5) # Label every cell with corresponding value and rotate 45 degree.
+g_all=ggplot(m, aes(x=Var1, y=Var2, fill=value))+xlab('X-labels')+ylab("Y-labels")+opts(title="Heatmap Example")+geom_tile(color="white", size=0.1)+scale_fill_gradient(low='green',high='red')+guides(fill=FALSE)
++geom_text(aes(label=round(value,2)), angle=45);print(g_all)
+
+
+二、绘制相关系数矩阵
+> mcor<-cor(mtcars)     //获取相关系数矩阵
+> library(ggplot2)
+> round(mcor,digits=2)        //四舍五入函数，2表示保留两位小数
+> install.packages("corrplot")
+> library(corrplot)
+> corrplot(mcor)
+> corrplot(mcor,method="shade",shade.col=NA,tl.col="black",tl.srt=45)
+>corrplot.mixed(mcor, lower="ellipse", upper="circle")
+>col1 <- colorRampPalette(c("#7F0000","red","#FF7F00","yellow","white", "cyan", "#007FFF", "blue","#00007F"))
+>corrplot(M, order="hclust", addrect=2, col=col1(100))
+>corrplot(M, order="AOE", cl.pos="n", tl.pos="n")     //cl.*:颜色图例，tl.*:文本图例
+>
+>
+>
+
+
+corrplot(corr,                         //相关系数矩阵
+method = c("circle", "square", "ellipse", "number", "shade",  "color", "pie"),    //形状
+type = c("full", "lower", "upper"),    //全显示、上三角、下三角
+add = FALSE,        //逻辑,如果这是真的,图添加到现有的图表中,否则就会创建一个新的图表
+col = NULL,         //向量,符号的颜色。
+bg = "white",         //背景色
+title = "",            //标题
+is.corr = TRUE,      //逻辑,是否输入矩阵相关矩阵。
+diag = TRUE,       //是否呈现对角线上的值
+outline = FALSE,    //是否呈现图形的边框
+mar = c(0, 0, 0, 0),   //
+addgrid.col = NULL,
+addCoef.col = NULL,
+addCoefasPercent = FALSE,
+order = c("original","AOE","FPC","hclust","alphabet"),
+hclust.method = c("complete", "ward","ward.D", "ward.D2", "single", "average", "mcquitty", "median", "centroid"),
+addrect = NULL, 
+rect.col = "black", 
+rect.lwd = 2, 
+tl.pos = NULL,
+tl.cex = 1,
+tl.col = "red", 
+tl.offset = 0.4, 
+tl.srt = 90,
+cl.pos = NULL,     //刻度尺的位置，r右边,b下边,n不显示
+cl.lim = NULL, 
+cl.length = NULL, 
+cl.cex = 0.8,
+cl.ratio = 0.15,    //刻度尺的宽度
+cl.align.text = "c", 
+cl.offset = 0.5, 
+number.cex = 1,  //在将相关系数写入plot时，cex参数将发送到文本调用
+number.font = 2, 
+number.digits = NULL, //显示的小数位数被添加到情节。非负整数或零,默认为空。
+addshade = c("negative","positive", "all"),
+shade.lwd = 1,       //数字,树荫下的线宽
+shade.col = "white", //帘线的颜色
+p.mat = NULL,  //假定值的矩阵,如果空,参数sig.level,insig,pch pch。上校,pch。cex是无效的
+sig.level = 0.05,     //如果p - mat的p值大于sig. level，则相应的相关系数被认为是无关紧要的
+insig = c("pch", "p-value", "blank", "n"),
+pch = 4,                 //在不显著相关系数的符号上添加字符
+pch.col = "black",
+pch.cex = 3,
+plotCI = c("n", "square", "circle","rect"),  //
+lowCI.mat = NULL,      //置信区间xia界的矩阵
+uppCI.mat = NULL,      //置信区间上界的矩阵
+na.label = "?",           //标签用于呈现NA细胞
+na.label.col = "black",     //颜色用于呈现NA细胞。默认是“黑色”
+...)
+
+三、绘制等高线图
+（1）绘制2D等高线
+> ggplot(faithful,aes(x=eruptions,y=waiting))+geom_point()+stat_density2d()
+>ggplot(faithful,aes(x=eruptions,y=waiting))+geom_point()+stat_density2d(aes(colour=..level..))
+
+（2）绘制2D密度图
+>ggplot(faithful,aes(x=eruptions,y=waiting))+geom_point()+stat_density2d(aes(fill=..density..),geom="raster",contour=FALSE)
+>ggplot(faithful,aes(x=eruptions,y=waiting))+geom_point()+stat_density2d(aes(alpha=..density..),geom="raster",contour=FALSE)
+
+
+四、瀑布图
+（1）waterfalls包
+library(waterfalls)
+library(ggplot2)
+library(ggthemes)
+> mydata=data.frame(Item=as.factor(c('Before','Factor A','Factor B','Factor C','Factor D',
++ 'Factor E','Factor F','Factor G')),
++ data=c(325,-32,-105,38,86,97,232,389))           //构造数据框
+> waterfall(.data = mydata ,                      //加载数据集并作图
++ rect_text_labels = paste(levels(mydata$Item),'\n',mydata$data),    //增加标签
++ fill_colours = c('darkslateblue','chocolate','chocolate','chartreuse', 'chartreuse','chartreuse', 'chartreuse',
++ 'chartreuse'),          //填充颜色
++ calc_total = TRUE,     //计算汇总
++total_rect_color = "darkslateblue",    //设置汇总后的颜色
++ total_rect_text = paste('After','\n',sum(mydata$data)),           //设置汇总后的标签
++ total_rect_text_color = "black",              //设置汇总后标签的颜色
++ total_axis_text = "After",                   //设置汇总后的轴标签
++ rect_width = 0.9,                        //间距
++ draw_axis.x = "behind",                 
++ rect_border = "white",
++ fill_by_sign = FALSE)+
++ theme_map()+
++ geom_hline(yintercept = 0, colour = 'skyblue')
+
+
+
+waterfall
+(.
+data = NULL,   //含有标签和值得两列数据框
+values,        //一个数字矢量在瀑布中形成矩形的高度
+labels,        //对应于每个向量的标签，在x轴上标注
+rect_text_labels = values,     //一个与被放置在矩形上的值相同长度的字符向量
+rect_text_size = 1,          //矩形的文本大小
+rect_text_labels_anchor = "centre",     //暂时只支持centre
+put_rect_text_outside_when_value_below = 0.05 * (max(cumsum(values)) - min(cumsum(values))),
+calc_total = FALSE,        //时候计算汇总列
+total_axis_text = "Total",    //汇总列在x上的文本
+total_rect_text = sum(values),     //汇总列在矩形框中的文本
+total_rect_color = "black",        //汇总列的颜色
+total_rect_text_color = "white",    //汇总列的文本颜色
+fill_colours = NULL,            //填充颜色
+fill_by_sign = TRUE,           
+rect_width = 0.7,               //矩形的宽度
+rect_border = "black",          //矩形的边界
+draw_lines = TRUE,           //在矩形之间时候划线
+lines_anchors = c("right", "left"),    //draw_lines的线条位置
+linetype = "dashed",           //draw_lines的线条类型
+draw_axis.x = "behind",       // one of "none", "behind", "front"
+theme_text_family = "",
+print_plot = FALSE,
+ggplot_object_name = "mywaterfall"
+)
+
+theme_map
+(
+base_size = 9,
+base_family = ""
+)                       //一个干净的主题
+
+（2）rAmCharts包
+> mydata=data.frame(
+label=c('Before','Factor A','Factor B','Factor C','Factor D','Factor E','Factor F','Factor G','After'),
+value=c(325,32,105,38,86,97,232,389,1030),
+operation=c('total','minus','minus','plus','plus','plus','plus','plus','total'))
+> p<-amWaterfall(data=mydata,show_values=TRUE)
+> p
+
+
+amWaterfall(data, start = 0, horiz = FALSE, show_values = FALSE, amOptions )
+
+五、颜色设置
+（1）rainbow
+（2）heat.colors
+（3）terrain.colors
+（4）topo.colors
+（5）cm.colors
+
+rainbow(n, s = 1, v = 1, start = 0, end = max(1, n - 1)/n, alpha = 1)
+heat.colors(n, alpha = 1)
+terrain.colors(n, alpha = 1)
+topo.colors(n, alpha = 1)
+cm.colors(n, alpha = 1)
+
+n	
+the number of colors (≥ 1) to be in the palette.
+s, v	
+the ‘saturation’ and ‘value’ to be used to complete the HSV color descriptions.
+start	
+the (corrected) hue in [0,1] at which the rainbow begins.
+end	
+the (corrected) hue in [0,1] at which the rainbow ends.
+alpha	
+the alpha transparency, a number in [0,1], see argument alpha in hsv.
+
+六、坐标设置
+coord_cartesian(xlim = NULL, ylim = NULL)
+笛卡尔坐标：从来看coord_cartesian的参数相对比较简单，x和y的数据限定范围
+coord_flip(...)
+横向转换坐标：把x轴和y轴互换，没有特殊参数
+coord_trans(x = "identity", y = "identity", limx = NULL, limy = NULL)
+坐标形式转换：包括对数转换，平方根转换等，这里x和y 的值可以是log10,log2或squal等，另外两个参数也是限定坐标范围
+coord_equal(ratio=1, ...)
+等坐标转换：使用这个函数后，x轴和y轴坐标会被转换成相等形式，此时图形会产生较大的缩放，radio可以进一步调整缩放比例（x和y的比值）
+coord_polar(theta = "x", start = 0, direction = 1)
+极坐标转换：可以做出蜘蛛图或饼图的效果，参数方面theta 可以选择x或y，表示外延的坐标，start是坐标开始的角度，默认其实位置是12点钟，
+direction 表示数据的方向，1是顺时针，-1为逆时针。
+
+eg：
+> p<-ggplot(mtcars,aes(mpg,hp))+geom_point(color="blue",size=2)
+> p
+> p+coord_cartesian()
+> p+coord_flip()
+> pp<-ggplot(mtcars,aes(cyl))+geom_bar(fill="blue",width=0.8)
+> pp
+> pp+coord_flip()
+> p+coord_trans(x="log2",y="sqrt")
+> p+coord_equal()
+> p+coord_polar(theta="x")
+> p+coord_polar(theta="y")
+> pp+coord_polar(theta="y")
+
+
+七、facet分面
+facet_wrap(facets, nrow = NULL, ncol = NULL, scales = "fixed",shrink = TRUE, as.table = TRUE, drop = TRUE)
+facets：分面参数如 ~cut，表示用 cut 变量进行数据分类
+nrow：绘制图形的行数
+ncol：绘制图形的列数，一般nrow/ncol只设定一个即可
+scales：坐标刻度的范围，可以设定四种类型。fixed 表示所有小图均使用统一坐标范围；free表示每个小图按照各自数据范围自由调整坐标刻度范围；free_x为自由调整x轴刻度范围；free_y为自由调整y轴刻度范围。
+shrinks：也和坐标轴刻度有关，如果为TRUE（默认值）则按统计后的数据调整刻度范围，否则按统计前的数据设定坐标。
+as.table：和小图排列顺序有关的选项。如果为TRUE（默认）则按表格方式排列，即最大值（指分组level值）排在表格最后即右下角，否则排在左上角。
+drop：是否丢弃没有数据的分组，如果为TRUE（默认），则空数据组不绘图。
+
+
+p + geom_point() + facet_wrap(~cut, scales="free") + ggtitle('scales="free"')
+p + geom_point() + facet_wrap(~cut, scales="free_y") + ggtitle('scales="free_y"')
+qplot(carat, price, data=diamonds, alpha=I(0.2)) + facet_grid(color~cut)
+
+facet_grid(facets, margins = FALSE, scales = "fixed", space = "fixed", shrink = TRUE,
+labeller = "label_value", as.table = TRUE, drop = TRUE)
+和facet_wrap比较，除不用设置ncol和nrow外（facets公式已经包含）外还有几个参数不同：
+margins
+注意：这不是设定图形边界的参数。它是指用于分面的包含每个变量元素所有数据的数据组。
+qplot(carat, price, data=diamonds, alpha=I(0.2)) + facet_grid(color~cut, margins=TRUE)
+space
+这个参数要配合scales使用，如果为fixed（默认），所有小图的大小都一样，如果为free/free_x/free_y，小图的大小将按照坐标轴的跨度比例进行设置。
+labeller
+这是设定小图标签的，facet_grid的函数说明档讲得比较明白，参考之。或许会在后面介绍
+qplot(carat, price, data=diamonds, alpha=I(0.2)) + facet_grid(color+clarity~cut)
+
+
+八、映射
+（1）映射的类型
+ggplot2按照图形属性提供了以下可用映射类型：
+颜色类型映射：包括 color（颜色或边框颜色）、fill（填充颜色）和 alpha（透明度）
+形状类型映射：包括 linetype（线型）、size（点的大小或线的宽度）和 shape（形状）
+位置类型映射：包括 x, y, xmin, xmax, ymin, ymax, xend, yend
+特殊类型：包括两类，一类是指定数据分组和顺序的映射group和order，另一类是字符串映射。
+
+
+
+九、rjson和rjsonio
+
+
+十、R语言实现mysql连接
+#加载需要的library
+library(rjson)
+library(RCurl)
+library(RMySQL);
+
+#建立MySQL的连接
+connect <- dbConnect(MySQL(),dbname="db_olap_web", username="root", password="")
+
+#对数据库进行查询
+ips <- dbGetQuery(connect, "SELECT ip FROM(SELECT remote_Addr ip FROM t_web_visit_log GROUP BY remote_Addr) aWHERE ip NOT IN (SELECT ip FROM t_dim_ip_info);");
+
+#淘宝IP库查询接口地址
+searchURL ="http://ip.taobao.com/service/getIpInfo2.php?ip=";
+
+#设置中文编码，否则往数据库写中文会有乱码
+dbSendQuery(connect, "set namesutf8;");
+
+#遍历需要抓取的IP信息
+for(ip in ips[,1]) {
+ url <- paste(searchURL, ip,sep="");
+ print(url);
+ #抓取 & 解析
+ rjs <-getURL(url);
+ rj <-fromJSON(rjs);
+ 
+ country <-rj$data$country;
+ area <-rj$data$area;
+ region <-rj$data$region;
+ city <-rj$data$city;
+ isp <-rj$data$isp;
+ #保存数据到MySQL
+ sql <- paste("insert intot_dim_ip_info values('", ip, "', '",country, 
+  "', '", area, "', '", region,"', '", city, "', '", isp ,"');", sep="");
+ ips <- dbGetQuery(connect,sql);
+ Sys.sleep(10);
+}
+
+#关闭数据库连接
+dbDisconnect(connect);
+
+
+十一、R语言数据储存与读取
+
+1 首先用getwd() 获得当前目录，用setwd("C:/data")设定当前目录
+2 数据保存
+创建数据框d
+>d <- data.frame(obs = c(1, 2, 3), treat = c("A", "B", "A"), weight = c(2.3, NA, 9))
+2.1 保存为简单文本
+>write.table(d, file = "c:/data/foo.txt", row.names = F, quote = F) # 空格分隔
+>write.table(d, file = "c:/data/foo.txt", row.names = F, quote = F, sep="\t")  # tab 分隔的文件
+2.2 保存为逗号分割文本
+>write.csv(d, file = "c:/data/foo.csv", row.names = F, quote = F)
+2.3 保存为R格式文件
+>save(d, file = "c:/data/foo.Rdata")
+2.4 保存工作空间镜像
+>save.image( ) = save(list =ls(all=TRUE), file=".RData")
+3 数据读取
+读取函数主要有：read.table( ), scan( ) ，read.fwf( )，readLines().
+3.1 用 read.table( ) 读 "c:\data” 下houses.dat
+>setwd("C:/data"); HousePrice <- read.table(file="houses.dat")
+如果明确数据第一行做表头，则使用header选项
+>HousePrice <- read.table("houses.dat", header=TRUE)
+read.table( ) 变形有： read.csv( ),read.csv2( ), read.delim( ), read.delim2( ).前两读取逗号分割数据，后两个读取其他分割符数据。
+3.2  用scan( ) 比read.table( ) 更灵活。
+但要指定 变量类型：如：C:\data\data.dat:
+M 65 168
+M 70 172
+F 54 156
+F 58 163
+>mydata <- scan("data.dat", what = list("", 0, 0))
+>mydata <- scan("data.dat", what = list(Sex="", Weight=0, Height=0))
+3.3 用read.fwf( )读取文件中一些固定宽度数据
+如：C:\data\data.txt:
+A1.501.2
+A1.551.3
+B1.601.4
+>mydata <- read.fwf("data.txt", widths=c(1, 4, 3), col.names=c("X","Y","Z"))
+4 excel格式数据读取
+4.1 利用剪切板
+选择excel数据，再用(CTRL+C)复制。在R中键入命令：
+>mydata <- read.delim("clipboard")
+4.2 使用程序包 RODBC.
+如： c:\data\body.xls
+Sex Weight Height
+M 65 168
+M 70 172
+F 54 156
+F 58 163
+> library(RODBC)
+> z <- odbcConnectExcel("c:/data/body.xls")
+> foo <- sqlFetch(z, "Sheet1")
+> close(z)
+

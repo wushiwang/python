@@ -1,0 +1,1263 @@
+2.1  Linux网络相关概念和修改IP地址的方法
+2.1.1  网卡的命名规则
+	CENTOS6的网卡命名方式：它会根据情况有所改变而非唯一且固定，在CENTOS6之前，网络接口使用连续号码命名： eth0、 eth1等,当增加或删除网卡时，名称可能会发生变化
+	CENTOS7采用dmidecode采集命名方案，以此来得到主板信息；它可以实现网卡名字永久唯一化（dmidecode这个命令可以采集有关硬件方面的信息）
+对网络设备的命名方式：
+1）如果Firmware（固件）或BIOS为主板上集成的设备提供的索引信息可用，且可预测则根据此索引进行命名，例如: ifcfg-ens33 
+2） 如果Firmware（固件）或BIOS为PCI-E扩展槽所提供的索引信息可用，且可预测，则根据此索引进行命名，例命名，例如:ifcfg-enp33
+3）如果硬件接口的物理位置信息可用，则根据此信息进行命名，例如enp2s0
+上述均不可用时，则使用传统命名机制。
+扩展：
+在CENTOS7中，en表示：ethernet以太网，就是咱们现在使用的局域网
+enX(X常见有下面3种类型) ：
+o：主板板载网卡，集成设备的设备索引号。  如果
+p：独立网卡，PCI网卡 
+s：热插拔网卡，usb之类，扩展槽的索引号
+nnn (数字)表示：MAC地址+主板信息计算得出唯一的序列
+
+2.1.2  ifconfig命令使用方法
+注意：下面操作使用root用户（动态修改）
+命令：ifconfig
+作用：用来配置网络或显示当前网络接口的状态
+[root@xuegod63 ~]# ifconfig 
+ens33: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+ inet 192.168.1.63  netmask 255.255.255.0  broadcast 192.168.1.255
+        inet6 fe80::c09d:975d:89cd:fd3f  prefixlen 64  scopeid 0x20<link>
+        ether 00:0c:29:02:83:db  txqueuelen 1000  (Ethernet)
+        RX packets 3255  bytes 4458479 (4.2 MiB)
+        RX errors 0  dropped 26  overruns 0  frame 0
+        TX packets 1130  bytes 81645 (79.7 KiB)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+上图信息大概说明：
+第一行：up-->网卡开启状态
+		RUNNING-->网线处理连接状态
+		MULTICAST-->支持组播
+		mtu 1500-->（Maximum Transmission Unit）最大传输单元大小为1500字节
+第二行：该网卡的IP地址，子网掩码，广播地址
+第三行：IPV6的配置信息
+第四行：网卡的MAC地址
+		ether表示连接类型为以太网
+		txqueuelen 1000 --》传输队列的长度
+第五六行：网卡接收数据包的统计信息和接收错误的统计信息
+第七八行：网卡发送数据包的统计信息和发送错误的统计信息
+
+2.1.3  临时修改IP地址
+方法1：临时修改网卡IP地址
+ifconfig 网卡名称 IP地址     ---直接修改网卡的IP地址，重启失效
+[root@xuegod63 Desktop]# ifconfig ens33
+ens33: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+        inet 192.168.1.63  netmask 255.255.255.0  broadcast 192.168.1.255
+[root@xuegod63 Desktop]# ifconfig ens33 192.168.1.110 netmask 255.255.255.0
+说明：修改后当前终端会终断，需要重新使用新的IP地址进行连接
+[root@xuegod63 Desktop]# ifconfig ens33
+ens33: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+        inet 192.168.1.110  netmask 255.255.255.0  broadcast 192.168.1.255
+        inet6 fe80::20c:29ff:fee8:ac4  prefixlen 64  scopeid 0x20<link>
+        ether 00:0c:29:e8:0a:c4  txqueuelen 1000  (Ethernet)
+        RX packets 2028  bytes 198715 (194.0 KiB)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 385  bytes 51073 (49.8 KiB)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+[root@xuegod63 Desktop]# systemctl restart network     //CENTOS7的网卡重启方法
+[root@xuegod63 Desktop]# service network restart     //CENTOS6的网卡重启方法
+[root@xuegod63 Desktop]# ifconfig ens33
+ens33: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+ inet 192.168.1.63  netmask 255.255.255.0  broadcast 192.168.1.255       
+
+方法2： 添加多个临时IP地址
+ifconfig 网卡名称:0 第一个IP地址 （netmask 子网掩码） ---增加一个IP
+ifconfig 网卡名称:1 第二个IP地址 （netmask 子网掩码） ---增加一个IP
+[root@xuegod63 ~]# ifconfig ens33:0 192.168.1.110 netmask 255.255.255.0 up
+[root@xuegod63 ~]# ifconfig 
+ens33: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+        inet 192.168.1.63  netmask 255.255.255.0  broadcast 192.168.1.255
+    
+ens33:0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+        inet 192.168.1.110  netmask 255.255.255.0  broadcast 192.168.1.255
+        ether 00:0c:29:e8:0a:c4  txqueuelen 1000  (Ethernet)
+删除临时IP
+[root@xuegod63 ~]# ifconfig ens33:0 del 192.168.1.110
+[root@xuegod63 ~]# ifconfig 
+ens33: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+        inet 192.168.1.103  netmask 255.255.255.0  broadcast 192.168.1.255
+        inet6 fe80::20c:29ff:fee8:ac4  prefixlen 64  scopeid 0x20<link>
+        ether 00:0c:29:e8:0a:c4  txqueuelen 1000  (Ethernet)
+        RX packets 3056  bytes 311813 (304.5 KiB)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 961  bytes 145297 (141.8 KiB)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+ens33:1: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+        inet 192.168.1.111  netmask 255.255.255.0  broadcast 192.168.1.255
+        ether 00:0c:29:e8:0a:c4  txqueuelen 1000  (Ethernet)
+
+2.1.4  NeworkManager概述
+NeworkManager服务是管理和监控网络设置的守护进程，CENTOS7更加注重使用NetworkManager服务来实现网络的配置和管理，7.0以前是通过network服务管理网络，以后的版本，所有网络管理和设置统一由NetworkManager服务来维护。它是一个动态的，事件驱动的网络管理服务。
+[root@xuegod63 ~]# systemctl status NetworkManager  #查看networkmanager服务是是否启动
+
+2.1.6  RHEL/CENTOS  Linux网络相关的配置文件
+RHEL/CENTOS 网络相关的配置文件路径为：
+[root@xuegod63 ~]# ls /etc/sysconfig/network-scripts/ifcfg-ens33   #IP地址，子网掩码等配置文件
+[root@xuegod63 ~]# ls /etc/sysconfig/network-scripts/ifcfg-lo  #网卡回环地址
+[root@xuegod63 sysconfig]# cat /etc/resolv.conf    #DNS配置文件
+[root@xuegod63 sysconfig]# cat /etc/hosts   #设置主机和IP绑定信息
+[root@xuegod63 sysconfig]# cat /etc/hostname   #设置主机名
+
+2.1.5  永久修改网卡地址：
+方法1：使用nmtui文本框方式修改IP
+[root@xuegod63 Desktop]# nmtui
+注：把光标移到最下面，点“确定”，进行保存。
+重启网卡服务生效：
+[root@xuegod63 ~]# systemctl restart network   ---重启服务
+
+方法2：通过修改网卡配置文件改IP地址
+vim快捷键： 
+i  : 进入插入模式
+保存：先按esc键，再输入   ：wq  
+[root@xuegod63 ~]# vim /etc/sysconfig/network-scripts/ifcfg-ens33   
+TYPE=Ethernet
+BOOTPROTO=none     # 等号后面写：dhcp 表示动态获取IP地址，  satic 表示表态IP，none表示不指定，就是静态。
+DEFROUTE=yes
+IPV4_FAILURE_FATAL=no
+IPV6INIT=yes
+IPV6_AUTOCONF=yes
+IPV6_DEFROUTE=yes
+IPV6_FAILURE_FATAL=no
+NAME=ens33   #网卡名
+UUID=50eff37c-72b4-407a-a3ee-9ef8ca746b95
+
+DEVICE=ens33
+ONBOOT=yes
+DNS1=8.8.8.8
+DNS2=192.168.1.1
+NETMASK=255.255.255.0
+IPADDR=192.168.1.222
+PREFIX=24
+GATEWAY=192.168.1.1
+IPV6_PEERDNS=yes
+IPV6_PEERROUTES=yes
+IPV6_PRIVACY=no
+参数说明：
+DEVICE：此配置文件应用到的设备
+HWADDR：对应的设备的MAC地址
+BOOTPROTO：激活此设备时使用的地址配置协议，常用的dhcp, static, none,bootp
+NM_CONTROLLED： NM是NetworkManager的简写，此网卡是否接受NM控制；建议CentOS6为“no”
+ONBOOT：在系统引导时是否激活此设备
+TYPE：接口类型；常见有的Ethernet, Bridge
+UUID：设备的惟一标识
+IPADDR：指明IP地址
+NETMASK：子网掩码
+GATEWAY: 默认网关
+DNS1：第一个DNS服务器指向
+DNS2：第二个DNS服务器指向
+USERCTL：普通用户是否可控制此设备
+IPV4_FAILURE_FATAL 如果为yes，则ipv4配置失败禁用设备
+
+2.2  关闭防火墙并设置开机开不启动
+查看当前状态
+[root@xuegod63 ~]# systemctl status firewalld.service    #查看firewalld状态
+[root@xuegod63 ~]# systemctl stop firewalld       #关闭
+[root@xuegod63 ~]# systemctl start firewalld       #开启
+[root@xuegod63 ~]# systemctl disable firewalld     #开机自动关闭   //RHLE7
+[root@xuegod63 ~]# chkconfig --list|grep network    #查看开机是否启动   //RHLE6
+[root@xuegod63 ~]# systemctl enable firewalld     #开机自动启动
+
+2.3  临时和永久关闭Selinux
+临时关闭
+[root@xuegod63 ~]# getenforce 
+Enforcing
+[root@xuegod63 ~]# setenforce 0
+
+setenforce: SELinux is disabled
+永久关闭
+[root@xuegod63 ~]# vim /etc/selinux/config  
+改：7 SELINUX=enforcing     #前面的7，表示文档中第7行。方便你查找
+为：7 SELINUX=disabled
+[root@xuegod63 ~]# reboot
+
+2.4  设置系统光盘开机自动挂载
+[root@xuegod63 ~]# vim  /etc/fstab  #在文档最后，添加以一下红色内容：
+/dev/cdrom 			      /mnt			  iso9660 defaults        0 0
+[root@xuegod63 ~]# mount -a
+mount: /dev/sr0 写保护，将以只读方式挂载
+[root@xuegod63 ~]# ls /mnt/   #可以查看到此目录下有内容，说明挂载成功
+CentOS_BuildTag  GPL       LiveOS    RPM-GPG-KEY-CentOS-7
+
+2.5  配置本地YUM源
+yum的一切配置信息都储存在一个叫yum.repos.d的配置文件中，通常位于/etc/yum.repos.d目录下
+删除原有的文件
+[root@xuegod63 yum.repos.d]#rm -rf  /etc/yum.repos.d/*
+创建一个新的yum源配置文件，yum源配置文件的结尾必须是.repo
+[root@xuegod63 yum.repos.d]# vim  CentOS7.repo  #写入以下红色内容
+[CentOS7]   
+name=CentOS-server     
+baseurl=file:///mnt  
+enabled=1  
+gpgcheck=0
+参数说明：
+[CentOS7]        --->yum的ID，必须唯一 
+name=CentOS-server     ----->描述信息
+baseurl=file:///mnt    -------> /mnt表示的是光盘的挂载点  . file:后面有3个///
+enabled=1   ------>启用
+gpgcheck=0   ---->取消验证
+
+清空并生成缓存列表
+[root@localhost ~]# yum clean all				#清空yum缓存
+[root@localhost ~]# yum list						#生成缓存列表
+验证一下
+[root@xuegod63 yum.repos.d]# yum -y install httpd
+
+3.1  Linux终端介绍、Shell提示符、Bash基本语法
+3.1.1  登录LINUX终端
+两种终端仿真器：1、GNOME桌面的GHOME Terminal ； 2、KDE桌面的Konsole Terminal
+远程连接终端工具： Xshell , CRT 。后期会教你安装。
+例1：通过tty命令看到当前所属的虚拟终端
+[root@xuegod63 ~]# tty
+/dev/pts/0
+注：shift+ctrl+N 快速打开一个终端。  终端字体放大： shift+ctrl+加号。终端字体缩小：ctrl+减号
+例2：不同虚拟终端之间通讯
+同时打开两终端，第一个终端执行：
+ [root@xuegod63 ~]# echo xuegod > /dev/pts/1
+在第二个终端查看：有xuegod输出
+
+例3：对所有终端广播消息：系统10分钟后关机。
+[root@xuegod63 ~]# shutdown +10   #执行此命令后，在其他终端都会收到关机的消息
+[root@xuegod63 ~]# shutdown -c   #取消关机
+或：
+[root@xuegod63 ~]# wall  " The system will be shut down in 10 minutes "   #广播，所有终端都能收
+到
+3.1.2 认识SHELL
+Shell俗称壳，它提供了用户与内核进行交互操作的一种接口，它接收用户输入的命令并把它送入内核去执行
+Shell实际上是一个命令解释器，它通过解释用户输入的命令并把它传输给系统内核去执行。
+Shell有自己的编程语言用于对命令的编辑，它允许用户编写由shell命令组成的程序。Shell编程语言具有普通编程语言的很多特点，比如它也有循环结构和分支控制结构等，用这种编程语言编写的Shell程序与其他应用程序具有同样的效果。
+
+内部命令：在系统启动时就调入内存，是常驻内存的，所以执行效率高
+外部命令：是系统软件的功能，用户需要时才从硬盘中读入内存
+
+如何区内外部命令？
+使用type命令  ，语法 : type   要检测的命令
+[root@xuegod63 ~]# type cat
+cat 是 /usr/bin/cat
+[root@xuegod63 ~]# type pwd
+pwd 是 shell 内嵌
+
+总结： 通过SHELL，我们可以对LINUX实现哪些操作或管理：
+例如：
+对文件的管理（创建、删除、复制、修改）
+1、对用户的管理（添加、删除）
+2、相关权限的管理（授权用户对相关文件的管理，比如增删改查）
+3、对磁盘的管理（分区、raid、lvm）
+4、对软件的管理
+5、对网络的管理
+3.1.3  shell提示符“#”号与“$”号的区别
+[root@xuegod63 ~]#        #表示是root用户登录，管理员账号登陆
+[root@xuegod63 ~]# su - mk  #切换到mk普通用户
+[mk@xuegod63 ~]$		  #表示普通用户登录	
+上面各位置对应的内容代表的意思如下：
+[root    @  xuegod63     ~                            ]#  
+用户名---@---主机名---当前所在目录(~表示当前用户的家目录)---(# root/$普通用户)
+3.1.4  认识Bash Shell 
+查看所有shell类型
+[root@xuegod63 ~]# cat /etc/shells 
+/bin/sh
+/bin/bash
+/sbin/nologin
+/usr/bin/sh
+/usr/bin/bash
+/usr/sbin/nologin
+/bin/tcsh
+具体你使用的是哪一个，取决于你的用户配置，也就是说你可以看一下/etc/passwd文件的每一行的最后一个字段
+[root@xuegod63 ~]# head  -1 /etc/passwd
+root:x:0:0:root:/root:/bin/bash
+
+3.2  基本命令操作
+在LINUX中使用一个命令，命令格式如下：
+命令 【选项】 【参数】 
+命令：具体执行的命令，比如pwd,head
+选项：会影响到命令的一些形为操作，通常以- --实现
+参数：命令作用的对象
+3.2.1  基本命令之--ls
+作用：查看当前目录下有哪些文件（list）
+
+语法：ls 目录/文件 ，如果什么也不加，那么查看的是当前目录下的内容
+常用选项：
+命令后面不加任何选项
+[root@xuegod63 ~]# ls
+-l  列出文件的详细信息，如创建者，创建时间，文件的读写权限列表等等，长列表
+[root@xuegod63 ~]# ls -l
+总用量 8
+-rw-------. 1 root root 1680 9月  19 12:16 anaconda-ks.cfg
+-rw-r--r--. 1 root root 1728 9月  19 12:55 initial-setup-ks.cfg
+drwxr-xr-x. 2 root root    6 9月  19 13:05 公共
+drwxr-xr-x. 2 root root    6 9月  19 13:05 模板
+drwxr-xr-x. 2 root root    6 9月  19 13:05 视频
+
+第一个字符文件类型中：
+d：目录文件
+l：链接文件
+b：块设备文件
+c：字符设备文件
+p：管道文件
+-: 表示普通文件
+为什么有的目录文件有不同的颜色呢？
+linux系统中不同的颜色代表了不同的文件类型
+
+颜 色       代表内容            举 例
+蓝色         目录              /etc
+黑色         文件           /etc/passwd
+浅蓝色       链接         /etc/grub2.cfg
+红色        压缩包          boot.tar.gz
+绿色       可执行文件    /etc/init.d/network
+黑底黄字    设备文件          /dev/sda
+
+-a  列出目录下所有的文件，包括以“.“开头的隐藏文件（linux下隐藏文件是以 . 开头的，如果存在2个点代表存在着父目录,1个点表示当前目录）　	
+[root@xuegod63 ~]# ls -a
+.                .bash_profile  .dbus                 .mozilla  视频  桌面
+-d 查看目录(不查看里面的内容)
+[root@xuegod63 ~]# ls -ld /root/
+dr-xr-x---. 15 root root 4096 11月 15 21:37 /root/
+
+-S 以文件的大小进行排序
+[root@xuegod63 ~]# ls -lS /root/
+总用量 8
+-rw-r--r--. 1 root root 1728 9月  19 12:55 initial-setup-ks.cfg
+-rw-------. 1 root root 1680 9月  19 12:16 anaconda-ks.cfg
+
+ls -l 和ll 这两个命令是等价的
+[root@xuegod63 ~]# ll /etc/passwd
+-rw-r--r--. 1 root root 2053 9月  19 12:57 /etc/passwd
+[root@xuegod63 ~]# ls -l /etc/passwd
+-rw-r--r--. 1 root root 2053 9月  19 12:57 /etc/passwd
+[root@xuegod63 ~]# type ll
+ll 是 `ls -l --color=auto' 的别名
+
+3.2.2 别名的使用
+定义一个别名：
+[root@xuegod63 ~]# alias vimens33='vim /etc/sysconfig/network-scripts/ifcfg-ens33' 
+[root@xuegod63 ~]# vimens33
+删除别名：
+[root@xuegod63 ~]# unalias vimens33
+
+设置别名永久生效：
+==》当前用户
+[root@xuegod63 ~]# vim /root/.bashrc  #插入以一下内容：
+8 alias vimenss33="vim /etc/sysconfig/network-scripts/ifcfg-ens33"
+[root@xuegod63 ~]# source /root/.bashrc 
+[root@xuegod63 ~]# vimenss33
+==》全局使用
+[root@xuegod63 ~]# vim /etc/bashrc   #在文件最后插入
+alias vimenss33="vim /etc/sysconfig/network-scripts/ifcfg-ens33"
+[root@xuegod63 ~]# su - mk
+上一次登录：四 11月 16 10:22:03 CST 2017pts/1 上
+[mk@xuegod63 ~]$ vimenss33
+
+3.2.3 基本命令之--cd
+作用：切换目录（change directory）
+语法：cd 目录
+说明：直接输入cd表示回到当前用户的宿主（家）目录
+[root@xuegod63 ~]# cd /etc/sysconfig/network-scripts/
+
+[root@xuegod63 network-scripts]# cd
+[root@xuegod63 ~]# cd ~
+cd ..  表示返回到上级目录位置，也就是父目录
+cd . 表示进入到当前目录
+[root@xuegod63 ~]# pwd
+/root
+[root@xuegod63 ~]# cd ..
+[root@xuegod63 /]# pwd
+/
+[root@xuegod63 /]# cd .
+[root@xuegod63 /]#
+cd -  #表示返回切换前的目录 
+[root@xuegod63 /]# cd /etc/sysconfig/network-scripts/
+[root@xuegod63 network-scripts]# cd -
+/
+3.2.4 历史命令之history
+命令：history
+4个快速查找Linux历史命令的技巧：
+方法1： 光标上下键
+方法2： ctrl+r -》输入某条命令的关键字-》找出来对应的命令，按右光标键
+方法3： !数字   //执行历史命令中第N条命令
+方法4：!字符串  //搜索历史命令中最近一个以xxxx字符开头的命令，例如！vim
+3.2.5 Linux下快捷键
+都是用Ctrl+下面的单词， ^表示Ctrl
+^C 
+	终止前台运行的程序 , 如：ping g.cn 后，想停止按下Ctrl+C
+^D 
+	退出 等价exit
+^L 
+	清屏与clear功能一样
+^R 
+	搜索历史命令，可以利用好关键词
+!$  引用上一个命令的最后一个参数
+[root@xuegod63 network-scripts]# cat /etc/hosts
+[root@xuegod63 network-scripts]# vim !$   #相当于执行： vim /etc/hosts
+补全命令使用tab键，Tab只能补全命令和文件
+
+3.3 系统时间管理
+在Linux中有硬件时钟与系统时钟等两种时钟。硬件时钟是指主机板上的时钟设备，也就是通常可在BIOS画面设定的时钟；系统时钟则是指kernel中 的时钟；所有Linux相关指令与函数都是读取系统时钟的设定
+当Linux启动时，系统时钟会去读取硬件时钟的设定，之后系统时钟即独立运作
+3.3.1 两种时间
+查看硬件时间：
+[root@xuegod63 etc]# hwclock 
+查看系统时间：
+[root@xuegod63 mnt]# date
+时区：
+UTC  （Universal Time Coordinated）：世界标准时间 
+GMT （Greenwich Mean Time）：格林尼治时间 
+CST  （China standard Time）：中国标准时间
+3.3.2 如何修改时间
+     date命令相关参数：
+     date --help
+-s, --set=STRING   把时间设为字符串所描述的时间
+例： [root@xuegod63 ~]# date -s "2018-11-2 22:30"
+2018年 11月 02日 星期五 22:30:00 CST
+
+%F	完整日期格式，等价于 %Y-%m-%d
+[root@xuegod63 ~]# date "+%F"
+2018-11-02
+
+%y	年份最后两位数位 (00-99)
+%Y	年份
+%m   month (01..12)
+%d	按月计的日期(例如：01)
+%M   minute (00..59)
+%H	小时(00-23)
+%S	秒(00-60)
+[root@xuegod63 ~]# date "+%Y%m%d"    
+20181102
+[root@xuegod63 ~]# date "+%Y-%m-%d %H:%M:%S"    #在年月日之前可以添加自己想要的符号
+2018-11-02 22:34:27
+[root@xuegod63 ~]# date "+%Y/%m/%d %H:%M:%S"
+2018/11/02 22:34:38
+[root@xuegod63 ~]# date "+%Y%m%d %H:%M:%S"
+20181102 22:35:03
+
+-d, --date=STRING   #显示由字符串描述的时间，而不是“当前时间”
+[root@xuegod63 ~]# date -d "+1 months" +%F
+2018-12-02
+
+3.3.3 使用time命令测试一个命令运行的时间
+time 作用：一般用来测量一个命令的运行时间
+使用方法：time 在后面直接跟上命令和参数
+[root@xuegod63 ~]# time ls -l /etc/
+
+real	0m0.056s
+user	0m0.016s
+sys	0m0.040s
+说明：
+real：实际使用时间
+user：用户状态使用的时间
+sys：内核状态使用的时间
+
+3.4  帮助命令使用
+遇到命令不知道添加哪个参数，可以使用命令帮助查看相关介绍，常用的查看帮助信息命令有如下几个
+3.4.1  man  命令  ：查看手册页或命令描述
+[root@xuegod63 ~]# man find
+man命令查看帮助时，支持它支持上翻下翻，搜索(直接输入斜线)，退出用q
+3.4.2  使用-h或--help查看命令选项
+[root@xuegod63 ~]# find -h   #不可以执行
+[root@xuegod63 ~]# find --help 
+
+3.5  开关机命令及7个启动级别
+常用的几个关机，重启命令
+shutdown
+init
+reboot   
+poweroff
+3.5.1 关机命令之--shutdown
+作用：关机，重启，定时关机
+语法：shutdown  [选项]
+参数：
+-r    => 重新启动计算机
+-h    => 关机
+-h  时间  =>定时关机
+例如:
+[root@xuegod63 ~]# shutdown -h +10      #10分钟之后关机
+[root@xuegod63 ~]# shutdown -h 23:30     #指定具体的时间点进行关机
+[root@xuegod63 ~]# shutdown -h now      #立即关机
+[root@xuegod63 ~]#shutdown -r  22：22    #22:22 以后重启
+
+3.5.2  7个启动级别
+作用：切换系统运行级别
+语法：init  0-6
+
+Linux 7个启动级别：
+0 系统停机模式，系统默认运行级别不能设置为0，否则不能正常启动，机器关的
+1 单用户模式，root权限，用于系统维护，禁止远程登陆，就像Windows下的安全模式登录
+2 多用户模式，没有NFS和网络支持
+3 完整的多用户文本模式，有NFS和网络，登陆后进入控制台命令行模式
+4 系统未使用，保留一般不用，在一些特殊情况下可以用它来做一些事情。例如在笔记本电脑的电池用尽时，可以切换到这个模式来做一些设置
+5 图形化模式，登陆后进入图形GUI模式，X Window系
+6 重启模式，默认运行级别不能设为6，否则不能正常启动。运行init 6机器就会重启
+例
+[root@localhost ~]# init 0   #关机
+[root@localhost ~]# init 3   #进入3级别字符界面
+[root@localhost ~]# init 5   #进入5级别图形界面
+
+3.5.3  设置默认的运行界别
+centos7不再使用/etc/inittab文件进行默认的启动级别配置，而使用比sysvinit的运行级更为自由的target替代。
+第3运行级用multi-user.target替代。
+第5运行级用graphical.target替代。
+
+设置默认第三启动级别
+[root@xuegod63 ~]# systemctl set-default multi-user.target
+设置默认第五启动级别
+[root@xuegod63 ~]# systemctl set-default graphical.target
+
+[root@xuegod63 ~]#runlevel
+3 5   #表示从3级别切换到了5级别
+查看当前默认的启动级别
+[root@xuegod63 ~]# systemctl get-default
+graphical.target
+
+3.6 实战：设置服务器来电后自动开机
+进入bios，一般是在开机后出现主板画面是按Delete这个键，部分品牌机可能按F2，F1
+
+选择Integrated Peripharals（外围设备设置）中的SuperIO Device
+Integrated  [ˈɪntɪgreɪtɪd]  集成  ； Peripharals  [pəˈrɪfərəl] 外围
+
+4.1 Linux系统目录结构和相对/绝对路径
+4.1.1系统目录结构
+在WIN系统中，查看文件先进入相应的盘符，然后进入文件目录
+
+在WIN中，它是多根  c:\    d:\   e:\
+Linux只有一个根目录
+
+tree命令查看linux目录结构，这个命令默认是没有安装的，需要手工安装一下
+[root@xuegod63 ~]# mount /dev/sr0  /media/
+mount: /dev/sr0 写保护，将以只读方式挂载
+[root@xuegod63 ~]# rpm -ivh /media/Packages/tree-1.6.0-10.el7.x86_64.rpm
+查看/tmp目录结构
+[root@xuegod63 ~]# tree  /tmp/
+查看根下有哪些文件：
+
+4.1.2  绝对路径和相对路径
+路径：在我们平时使用计算机时要找到需要的文件就必须知道文件的位置，而表示文件的位置的方式就是路径
+绝对路径：在Linux中，绝对路径是从”/”开始的，比如/usr、/etc/passwd。如果一个路径是从根（/）开始的，它一定是绝对路径.
+相对路径：相对路径是以 . 或 .. 开始的，
+ [root@xuegod63 etc]# pwd  #判断用户当前所处的位置
+绝对路径： 从/开始的路径  /home/mk
+相对路径： 相对于当前目录开始，a.txt  ./a.txt  ../miao/b.txt   当前目录在/etc
+[root@xuegod63 ~]# cd /etc/
+[root@xuegod63 etc]# ll passwd 
+-rw-r--r-- 1 root root 2116 11月 16 14:57 passwd
+[root@xuegod63 etc]# ll /etc/passwd
+-rw-r--r-- 1 root root 2116 11月 16 14:57 /etc/passwd
+4.2  文件的管理
+文件管理方式有多种：
+改变目录： cd
+创建/修改/移动/删除： touch   mkdir    mv  vi   rm  cp
+
+4.2.1 创建文件和文件夹
+命令之：touch　
+作用：常用来创建空文件,如果文件存在，则修改这个文件的时间
+补充：文件的三种时间
+[root@xuegod63 ~]# ll /etc/passwd  #查看文件修改的时间
+-rw-r--r-- 1 root root 2116 11月 16 14:57 /etc/passwd
+[root@xuegod63 ~]# stat /etc/passwd  #查看文件属性（其中包括文件时间属性）
+  文件："/etc/passwd"
+  大小：2116      	块：8          IO 块：4096   普通文件
+设备：803h/2051d	Inode：9401663     硬链接：1
+权限：(0644/-rw-r--r--)  Uid：(    0/    root)   Gid：(    0/    root)
+最近访问：2017-11-16 14:57:39.923177258 +0800
+最近更改：2017-11-16 14:57:39.397177256 +0800
+最近改动：2017-11-16 14:57:39.409177256 +0800
+注：
+访问时间：atime  查看内容   cat  a.txt
+修改时间：mtime  修改内容  vim a.txt
+改变时间：ctime  文件属性，比如权限  change time。  chmod +x a.sh
+
+语法：touch 文件名
+[root@xuegod63 ~]# cd /opt/
+[root@xuegod63 opt]# touch a.txt
+[root@xuegod63 opt]# touch file1 file2
+[root@xuegod63 opt]# touch file{6..20}  #创建file6到file20的文件
+[root@xuegod63 opt]# ls
+a.txt  file10  file12  file14  file16  file18  file2   file6  file8  rh
+file1  file11  file13  file15  file17  file19  file20  file7  file9
+
+[root@xuegod63 opt]#  touch -d "20181019 21:30" xuegod.txt
+[root@xuegod63 opt]# ll xuegod.txt 
+-rw-r--r-- 1 root root 0 10月 19 2018 xuegod.txt
+
+4.2.2  使用vim和重定向创建一个新文件
+用vim命令创建一个新文件
+[root@xuegod63 mnt]# vim xuegod-1.txt
+用重定向创建一新文件
+[root@xuegod63 mnt]#echo  aaa > xuegod.txt
+
+4.2.2  命令之：mkdir
+作用：创建目录
+语法：mkdir  (选项) 文件名
+例：
+[root@xuegod63 opt]# mkdir dir1
+[root@xuegod63 opt]# mkdir dir2 dir3 /home/dir4
+[root@xuegod63 opt]# ls /home/
+dir4  mk
+[root@xuegod63 opt]# mkdir /tmp/a/b/c
+mkdir: 无法创建目录"/tmp/a/b/c": 没有那个文件或目录
+[root@xuegod63 opt]# mkdir -p /tmp/a/b/c  #在创建一个目录的时候，如果这个目录的上一级不存在的话，要加参数-p
+[root@xuegod63 opt]# ls /tmp/a/b/
+c
+
+4.2.2  删除文件和目录
+用到的命令：rm
+作用：可以删除一个目录中的一个或多个文件或目录，对于链接文件，只是删除整个链接文件，而原文件保持不变的
+语法：rm (选项) 处理对象
+选项：
+-f  强制删除，没有提示
+-r  删除目录
+例子：
+[root@xuegod63 opt]# rm -rf a.txt 
+[root@xuegod63 opt]# rm -rf a.txt dir
+[root@xuegod63 opt]# rm -rf file*
+rm -rf  (慎用,一定要在删除以前确定一下所在目录，防止误删除重要数据)
+
+4.2.3 复制文件
+命令：cp  源文件/目录   目录文件/目录
+选项：-R/r：递归处理，将指定目录下的所有文件与子目录一并处理
+例子：
+
+[root@xuegod63 ~]# cp /etc/passwd /opt/   #复制文件
+[root@xuegod63 ~]# cp -r /boot/grub /opt/  #复制目录
+4.2.4 移动文件
+[root@xuegod63 opt]# mv passwd  dir1
+[root@xuegod63 opt]# mv xuegod.txt dir1/a.txt   #在移动文件的时候支持改名操作
+
+4.3  查看文件
+4.3.1 命令之：cat
+语法：cat 文件名
+作用：查看文件内容，一次显示整个文件的内容
+例子： [root@xuegod63 ~]# cat /etc/passwd 
+4.3.2 命令之：more
+作用:以分页形式显示文件内容
+语法:more + 文件名
+说明: 按下回车刷新一行，按下空格刷新一屏，输入q键退出
+
+4.3.3 命令之：less
+作用:和more功能一样
+语法:less +文件名
+说明:linux中more与less的区别
+more:不支持后退，但几乎不需要加参数，空格键是向下翻页，Enter键是向下翻一行，在不需要后退的情况下比较方便
+less：支持前后翻滚，既可以向上翻页（pageup按键），也可以向下翻页（pagedown按键）。，空格键是向下翻页，Enter键是向下翻一行
+
+4.3.4 命令之：head
+作用: 用于显示文件的开头的内容。在默认情况下，head命令显示文件的头10行内容
+语法:head(选项)文件名
+参数: -n 显示从文件头开始的行数
+[root@xuegod63 opt]# head /etc/passwd
+[root@xuegod63 opt]# head -n 3 /etc/passwd #显示前3行
+4.3.5 命令之：tail
+作用: 用于显示文件中的尾部内容。默认在屏幕上显示指定文件的末尾10行
+语法:tail (选项)文件名
+参数:  
+-n 显示文件尾部多少行的内容(n为数字)
+-f  动态显示数据（不关闭）,常用来查看日志
+[root@xuegod63 ~]# tail -n 3 /var/log/secure  #查看最后3行记录
+
+[root@xuegod63 ~]# tail -f /var/log/secure   #在一个终端执行此命令动态查看文件内容
+[root@xuegod63 ~]# ssh root@192.168.1.63   #在另一个终端远程登录Linux，登录成功后
+[root@xuegod63 ~]# tail -f /var/log/secure  #可以动态查看到登录成功的日志
+Nov 17 00:08:32 xuegod63 sshd[2924]: Accepted password for root from 192.168.1.63 port 39904 ssh2
+
+4.4  实战：xfs文件系统的备份和恢复
+XFS提供了 xfsdump 和 xfsrestore 工具协助备份XFS文件系统中的数据。xfsdump 按inode顺序备份一个XFS文件系统。
+centos7选择xfs格式作为默认文件系统，而且不再使用以前的ext，仍然支持ext4，xfs专为大数据产生，每个单个文件系统最大可以支持8eb，单个文件可以支持16tb，不仅数据量大，而且扩展性高。还可以通过xfsdump，xfsrestore来备份和恢复。
+与传统的UNIX文件系统不同，XFS不需要在备份前被卸载；对使用中的XFS文件系统做备份就可以保证镜像的一致性。XFS的备份和恢复的过程是可以被中断然后继续的，无须冻结文件系统。xfsdump 甚至提供了高性能的多线程备份操作——它把一次dump拆分成多个数据流，每个数据流可以被发往不同的目的地
+首先了解一下xfsdump的备份级别有以下两种，默认为0（即完全备份）
+0 级别代表：           完全备份
+1  到9级别代表：      增量备份
+扩展：
+完全备份：每次都把指定的备份目录完整的复制一遍，不管目录下的文件有没有变化；
+增量备份：每次将之前（第一次、第二次、直到前一次）做过备份之后有变化的文件进行备份；
+差异备份：每次都将第一次完整备份以来有变化的文件进行备份。
+4.4.1 环境准备
+实验环境：
+	 系统CENTOS7.2 添加一块虚拟硬盘（准备一个测试分区）
+正常使用一块磁盘过程如下：
+添加磁盘大小：20G 分区格式化挂载
+
+对新添加的硬盘进行格式化：
+[root@xuegod63 ~]# fdisk /dev/sdb					#指定分区的设备
+欢迎使用 fdisk (util-linux 2.23.2)。
+更改将停留在内存中，直到您决定将更改写入磁盘。
+使用写入命令前请三思。
+Device does not contain a recognized partition table
+使用磁盘标识符 0x06d5a427 创建新的 DOS 磁盘标签。
+命令(输入 m 获取帮助)：n  #创建一个新的分区
+Partition type:
+   p   primary (0 primary, 0 extended, 4 free)
+   e   extended
+Select (default p): p  #创建一个主分区
+分区号 (1-4，默认 1)：
+起始 扇区 (2048-41943039，默认为 2048)：
+将使用默认值 2048
+Last 扇区, +扇区 or +size{K,M,G} (2048-41943039，默认为 41943039)：+1G  #指定分区大小
+分区 1 已设置为 Linux 类型，大小设为 1 GiB
+命令(输入 m 获取帮助)：p  	#打印分区表
+磁盘 /dev/sdb：21.5 GB, 21474836480 字节，41943040 个扇区
+Units = 扇区 of 1 * 512 = 512 bytes
+扇区大小(逻辑/物理)：512 字节 / 512 字节
+I/O 大小(最小/最佳)：512 字节 / 512 字节
+磁盘标签类型：dos
+磁盘标识符：0x06d5a427
+   设备 Boot      Start         End      Blocks   Id  System
+/dev/sdb1            2048     2099199     1048576   83  Linux
+命令(输入 m 获取帮助)：w  	#保存
+The partition table has been altered!
+Calling ioctl() to re-read partition table.
+正在同步磁盘。
+[root@xuegod63 ~]# ls  /dev/sdb*
+/dev/sdb  /dev/sdb1
+
+使用新的分区，格式化分区，并进行挂载
+[root@xuegod63 ~]# mkfs.xfs /dev/sdb1
+[root@xuegod63 ~]# mkdir /sdb1     #创建挂载点
+[root@xuegod63 ~]# mount /dev/sdb1 /sdb1   #挂载
+准备备份测试文件
+[root@xuegod63 ~]# cd /sdb1/
+[root@xuegod63 sdb1]# cp /etc/passwd ./
+[root@xuegod63 sdb1]# mkdir test
+[root@xuegod63 sdb1]# touch test/a
+
+[root@xuegod63 sdb1]# tree /sdb1/
+[root@xuegod63 sdb1]# tree /sdb1/
+/sdb1/
+├── passwd
+└── test
+    └── a
+
+4.4.2 备份
+1、备份整个分区。 （这个功能就像是虚拟机的快照，服务器被黑后，进行快速恢复）
+xfsdump  -f 备份存放位置 要备份路径或设备文件
+注意：备份的路径这里不能写成/sdb1/。  可以是/dev/sdb1 或/sdb1 
+[root@xuegod63 sdb1]# xfsdump -f /opt/dump_sdb1  /dev/sdb1
+xfsdump: using file dump (drive_simple) strategy
+xfsdump: version 3.1.4 (dump format 3.0) - type ^C for status and control
+========== dump label dialog ==============================
+please enter label for this dump session (timeout in 300 sec)
+ -> dump_sdb1  指定备份会话标签
+session label entered: "dump_sdb1"
+ --------------------------------- end dialog ---------------------------------
+xfsdump: level 0 dump of xuegod63.cn:/sdb1
+xfsdump: dump date: Fri Nov 17 12:24:53 2017
+xfsdump: session id: b5a25fcd-d43d-4308-bf29-142066f89d9a
+xfsdump: session label: "dump_sdb1"
+xfsdump: ino map phase 1: constructing initial dump list
+xfsdump: ino map phase 2: skipping (no pruning necessary)
+xfsdump: ino map phase 3: skipping (only one dump stream)
+xfsdump: ino map construction complete
+xfsdump: estimated dump size: 25856 bytes
+============== media label dialog =============================
+please enter label for media in drive 0 (timeout in 300 sec)
+ -> sdb1  指定设备标签，就是对要备份的设备做一个描述
+media label entered: "sdb1"
+ --------------------------------- end dialog --------------------------------
+xfsdump: creating dump session media file 0 (media 0, file 0)
+xfsdump: dumping ino map
+xfsdump: dumping directories
+xfsdump: dumping non-directory files
+xfsdump: ending media file
+xfsdump: media file size 24544 bytes
+xfsdump: dump size (non-dir files) : 2592 bytes
+xfsdump: dump complete: 46 seconds elapsed
+xfsdump: Dump Summary:
+xfsdump:   stream 0 /opt/dump_sdb1 OK (success)
+
+xfsdump: Dump Status: SUCCESS
+2、 指定备份时免交互操作，方便后期做定时备份
+[root@xuegod63 sdb1]# xfsdump -f /opt/dump_passwd /sdb1 -L dump_passwd -M media1
+-L  ：xfsdump  纪录每次备份的 session 标头，这里可以填写针对此文件系统的简易说明
+-M  ：xfsdump 可以纪录储存媒体的标头，这里可以填写此媒体的简易说明
+
+3、指定只备份分区中某个目录
+参数：-s 文件路径  只对指定的文件进行备份，-s指定时，路径写的是相对路径(-s可以是文件或目录)
+[root@xuegod63 sdb1]# xfsdump -f /opt/dump_grub2 -s grub2/grub.cfg /boot -L dump_grub2 -M boot-sda1
+4、查看备份信息与内容
+备份成功后，我们就可以在/var/lib/xfsdump/inventory目录下看到生成的档案信息
+[root@xuegod63 opt]# xfsdump  -I（字母大写i）
+
+测试恢复：先删除之前创建的内容
+[root@xuegod63 sdb1]# ls
+passwd  test
+[root@xuegod63 sdb1]# pwd
+/sdb1
+[root@xuegod63 sdb1]# rm -rf ./*
+
+4.4.3 文件系统恢复
+语法：xfsrestore -f 指定恢复文件的位置 指定存放恢复后的文件的路径
+[root@xuegod63 opt]# xfsrestore -f /opt/dump_sdb1  /sdb1
+查看恢复情况
+[root@xuegod63 ~]# ls /sdb1/
+恢复单个文件如下：
+[root@xuegod63 ~]# mkdir /var/test/ 
+[root@xuegod63 ~]# xfsrestore -f /opt/dump_grub2 -s grub2/grub.cfg /var/test/
+[root@xuegod63 ~]# xfsrestore -f /opt/dump_grub2 -s grub2 /var/test/  #恢复目录
+
+注：
+使用 xfsdump 时，请注意下面下面的几个限制：
+1、xfsdump 不支持没有挂载的文件系统备份！所以只能备份已挂载的！
+2、xfsdump 必须使用 root 的权限才能操作 (涉及文件系统的关系)
+3、xfsdump 只能备份 XFS 文件系统
+4、xfsdump 备份下来的数据 (档案或储存媒体) 只能让 xfsrestore 解析
+5、xfsdump 是透过文件系统的 UUID 来分辨各个备份档的，因此不能备份两个具有相同 UUID 的文件系统
+4.4.4 增量备份
+概念
+	增量备份是指在一次全备份或上一次增量备份后，以后每次的备份只需备份与前一次相比增加或者被修改的文件。这就意味着，第一次增量备份的对象是进行全备后所产生的增加和修改的文件；第二次增量备份的对象是进行第一次增
+    
+    量备份后所产生的增加和修改的文件，以此类推。
+优缺点
+优点：没有重复的备份数据，因此备份的数据量不大，备份所需的时间很短。
+缺点：数据恢复相对比较麻烦，它需要上一次全备份和所有增量备份的内容才能够完全恢复成功，并且它们必须沿着从全备份到依次增量备份的时间顺序逐个反推恢复，因此可能会延长的恢复时间
+
+实战： 增量备份文件系统
+准备一个备份目录进行备份
+[root@xuegod63 sdb1]# tree  /sdb1
+/sdb1/
+├── passwd
+└── test
+    └── a
+对上面的内容进行第一次全备
+[root@xuegod63 sdb1]# xfsdump -f /opt/test-full /sdb1 -L test-full -M media0
+增加一些内容，然后进行第1次增量备份
+[root@xuegod63 ~]# touch  /sdb1/1.txt /sdb1/2.txt
+[root@xuegod63 ~]# tree  /sdb1/
+/sdb1/
+├── 1.txt
+├── 2.txt
+├── passwd
+└── test
+└── a 
+[root@xuegod63 sdb1]# xfsdump -l 1 -f /opt/test-back1 /sdb1 -L test-bak1 -M media0
+-l <level>  做一个等级为1的备份
+再次增加内容，然后进行level 2级别的增量备
+[root@xuegod63 sdb1]# touch  /sdb1/test/a.txt  /sdb1/test/b.txt
+[root@xuegod63 ~]# tree /sdb1/
+/sdb1/
+├── 1.txt
+├── 2.txt
+├── passwd
+└── test
+    ├── a
+    ├── a.txt
+└── b.txt 
+[root@xuegod63 sdb1]# xfsdump -l 2 -f /opt/test-back2 /sdb1 -L test-bak2 -M media0
+[root@xuegod63 ~]# rm -rf /sdb1/*    #删除所有数据
+
+现在进行恢复，要想恢复全部全部数据，包括新添加的文件，如何恢复？
+步骤：
+	1、先恢复完全备份    
+    
+    2、情况1: 恢复最后一次增量备份（如果两次增量备份都是1级的，所以只需要恢复最后一个增量就可以了。
+3、情况2：如果你做的是第一次是1级备，第二次是2级备，那么你在恢复的时候就需要先恢复完全备份，然后是1级备，最后是2级备）
+[root@xuegod63 ~]# xfsrestore -f /opt/test-full /sdb1/
+[root@xuegod63 ~]# xfsrestore -f /opt/test-back2 /sdb1/  #故意先恢复back2，查看
+[root@xuegod63 ~]# tree /sdb1/  #查看，发现没有1.txt ,2.txt 
+/sdb1/
+├── passwd
+└── test
+    ├── a
+    ├── a.txt
+└── b.txt 
+[root@xuegod63 ~]# xfsrestore -f /opt/test-back1 /sdb1/   
+[root@xuegod63 ~]# tree /sdb1/  
+到此，数据恢复成功了。
+
+5.1  vim主要模式介绍，vim命令模式。
+确保系统已经安装了VIM工具
+[root@panda ~]# rpm -qf `which vim`
+[root@panda ~]# rpm -qf `which vi`
+扩展：
+问：vi和vim是同一个软件包安装的吗?
+答：NO，vim是vi的增加版，最明显的区别就是vim可以语法加亮，它完全兼容vi
+5.1.1  vim编辑器模式
+
+首次进入文件    ---- 命令模式
+出现 “Insert” ---- 编辑模式
+输入:          ---- 命令行模式
+A：从编辑模式到命令行模式怎样切换?	
+	编辑模式->esc->命令模式->: ->命令行模式
+B：字符操作(怎样进入编辑模式?)
+	进入编辑模式 a i o  A I O
+说明：
+i 当前字符之前插入 (光标前)
+I 行首插入  (行首)
+
+a 当前字符之后插入 (光标后)
+A 行尾插入(行尾)
+o下一行插入 (另起一行)
+O上一行插入(上一行插入)
+x 向后删除一个字符		等同于delete
+X 向前删除一个字符     	
+u 撤销一步   每按一次就撤销一次
+r 替换
+
+5.1.2 在命令模式下做的操作：
+光标定位
+hjkl  左下上右
+0 和 home键表示切换到行首， $和end键表示切换到行尾
+gg 快速定位到文档的首行 ,  G定位到未行
+3gg 或者 3G  快速定位到第3行
+/string(字符串)   -----找到或定位你要找的单词或内容，如果相符内容比较多，我们可以通过N、n来进行向上向下查找，并且vi会对查找到的内容进行高亮显示，取消用 :noh
+/^d  ----^意思表示以什么开头 ，，查找以字母d开头的内容
+/t$   -----$意思表示以什么结尾，，查找以字母t结尾的内容
+vim + a.txt  打开文件后，光标会自动位于文件的最后一行
+
+
+如何对文本进行编辑
+删除、复制、粘贴、撤销
+y 复制（以字符为单位） :表示对单个字符进行复制，如果要复制整行，用yy（以行为单位）   
+复制N行： Nyy  ，比如： 2yy ，表示复制2行
+dd（删除，以行为单位，删除当前光标所在行）
+删除N行： Ndd  ，比如： 2dd ，表示删除2行
+p ： P粘贴
+剪切： dd
+x 删除光标所在位置的字符
+D 从光标处删除到行尾
+u  撤销操作 
+ctrl+r  还原撤销过的操作，将做过的撤销操作再还原回去，也就是说撤销前是什么样，再还原成什么样
+r 替换，或者说用来修改一个字符
+
+总结：vim如何进入其它模式
+a A  o O  i I 都是可以进行插入，编辑模式
+： 进入命令行模式
+v 进入可视模式
+ctrl+v 进入可视块模式
+
+V 进入可视行模式
+R 擦除、改写，进入替换模式
+你进入以上模式后，想要退出 ，按esc
+
+
+扩展：插入模式中的操作
+ctrl+p可以进行补全操作,所需要的内容必须是在当前打开的文件内存在的，它只针对当前文件
+
+
+5.1..3 V模式（列）
+进入v模式 移动光标选择区域、
+编程的时候需要进行多行注释：
+	1)、ctrl+v 进入列编辑模式
+	2)、向下或向上移动光标，把需要注释、编辑的行的开头选中起来
+	4)、然后按大写的I
+	5)、再插入注释符或者你需要插入的符号,比如"#"
+	6)、再按Esc,就会全部注释或添加了
+
+删除：再按ctrl+v 进入列编辑模式；向下或向上移动光标 ；选中注释部分,然后按d, 就会删除注释符号。
+
+5.1.4 命令行模式操作
+:w 保存 save
+:w! 强制保存
+:q 没有进行任何修改，退出 quit
+:q! 修改了，不保存，强制退出
+:wq 保存并退出 
+:wq! 强制保存并退出
+:x 保存退出
+例: wq! 强制保存并退出
+[root@xuegod63 ~]# ll /etc/shadow
+----------. 1 root root 1179 9月  19 12:57 /etc/shadow
+[root@xuegod63 ~]# vim /etc/shadow
+
+调用外部文件或命令
+假设：我想要写入我的网卡MAC地址,,我要查看一下,当前在vim编辑文档，照着写。这样好麻烦。
+在命令行模式下操作：
+:!ifconfig	调用系统命令
+!+命令
+读取其他文件。（把其他文件中的内容追加到当前文档中）
+:r /etc/hosts
+
+文本替换
+格式 : 范围（其中%所有内容）   s分隔符 旧的内容 分隔符 新的内容  （分隔符可以自定义）
+
+默认是每一行的第一个符合要求的词   (/g全部)
+:1,3 s/bin/xuegod    替换第1到3行中出现的第一个bin进行替换为xuegod
+:1,3 s/bin/xuegod/g  替换第1到3行中查找到所有的bin进行替换为xuegod
+:3 s/xue/aaaaa     #只把第3行中内容替换了
+:% s/do/xuegod/g  	将文本中所有的do替换成xuegod
+:% s/do/xuegod/gi	将文本中所有的do替换成xuegod, 并且忽略do的大小写
+:% s@a@b@g	   将文本中所有的a替换成b
+
+5.1.5 自定义vim使用环境
+临时设置
+:set nu  设置行号
+:set nonu 取消设置行号
+:noh   取消高亮显示
+永久设置环境
+vim /etc/vimrc  设置后会影响到系统所有的用户
+~/.vimrc   #在用户的家目录下，创建一个.vimrc。这样只影响到某一个用户，没有自己建一个
+例：
+[root@xuegod63 ~]# cat  /root/.vimrc  
+set nu
+[root@xuegod63 ~]# vim  /root/.vimrc
+
+
+
+
+
+vim打开多个文件
+方法1：以上下形势，打开两个文档
+[root@xuegod63 ~]# vim -o /etc/passwd /etc/hosts
+
+方法2：以左右方式打开两个文档
+[root@xuegod63 ~]# vim -O /etc/passwd /etc/hosts
+注：ctrl+ww  在两文档之间进行切换编辑。大写O左右分屏，小写的o上下分屏
+
+比较两个文件内容
+[root@xuegod63 ~]# cp /etc/passwd mima.txt
+[root@xuegod63 ~]# echo aaa >> mima.txt 
+[root@xuegod63 ~]# diff /etc/passwd mima.txt 
+40a41
+> aaa
+[root@xuegod63 ~]# vimdiff /etc/passwd mima.txt
+
+5.1.6  其它编辑器
+nano编辑器
+emacs编辑器
+GHOME编辑器gedit
+例：
+[root@xuegod63 ~]# gedit /etc/passwd
+
+5.1.7  实战1：在windows中编辑好的汉字文本文档，上传到Linux下打开乱码。
+实验环境：centos7.4 现在系统默认使用的语言是汉语。（系统中必须安装好中文包）。
+将同目录下“a此文件在windows下打开正常-到linux下vim打开是乱码.txt”上传到Linux服务器上。使用ssh远程连接到Linux上，使用vim打开显示乱码。
+
+原因：编码的问题
+通过iconv命令转码   没有使用过：1
+参数：
+-f, --from-code=名称 原始文本编码
+-t, --to-code=输出编码
+-o, --output=FILE 输出文件名
+[root@xuegod63 ~]# mkdir test  #创建一个测试目录
+[root@xuegod63 ~]# cd test/
+
+[root@xuegod63 ~]# iconv -f gb2312  -t utf8 a此文件在windows下打开正常-到linux下vim打开是乱码.txt  -o aa.txt
+[root@xuegod63 ~]# cat aa.txt 
+#!/bin/bash
+echo "学神IT"
+信息：
+-l, --list 列举所有已知的字符集
+
+5.1.8  实战2：解决将公司Linux服务器上脚本导到windows上打开串行的问题
+原因：因为windows和linux处理回车方法不同。
+上传” b在Linux编辑的文档到windows下没有换行.sh” 到Linux上，打开后正常显示
+[root@localhost test]# sz b在Linux编辑的文档到windows下没有换行.sh   #发送到本地
+在window 上打开显示：
+
+解决方法：
+[root@xuegod63 ~]# rpm -ivh /mnt/Packages/dos2unix-6.0.3-7.el7.x86_64.rpm
+注： 在centos7上，unix2dos这个命令已经被集成到dos2unix-6.0.3-7.el7.x86_64.rpm包中。在centos6下需要安装unix2dos.xxx.rpm。
+[root@localhost test]# unix2dos b在Linux编辑的文档到windows下没有换行.sh
+[root@localhost test]# sz b在Linux编辑的文档到windows下没有换行.sh   #发送到windows本地  显示正常。
+
+5.2  实战：在Centos6/RHEL6上恢复ext4文件系统下误删除的文件
+[root@xuegod63 ~]# rm -Rf /    #执行不成功的，
+rm: 在"/" 进行递归操作十分危险
+rm: 使用 --no-preserve-root 选项跳过安全模式
+[root@xuegod63 ~]# rm -rf /*    #这个可以执行成功。 呵呵。。。
+
+ext4文件系统上删除文件，可以恢复: extundelete ，ext3恢复使用：ext3grep
+windows恢复误删除的文件：  final data v2.0 汉化版  和  easyrecovery  
+
+扩展：
+Linux文件系统由三部分组成：文件名，inode，block
+windows也由这三部分组成。
+a.txt          -->inode              --> block
+文件名       存放文件元数据信息       真正存放数据
+查看文件文件名：
+[root@xuegod63 ~]# cp /etc/passwd a.txt 
+[root@xuegod63 ~]# ls a.txt 
+a.txt
+
+查看inode号：
+常识： 每个文件，有一个inode号。
+[root@xuegod63 ~]# ls -i a.txt
+
+440266 a.txt
+查看inode中的文件属性;  通过stat命令查看inode中包含的内容
+[root@xuegod63 ~]# stat a.txt   #查看inode信息：
+[root@xuegod63 ~]# ls -l a.txt 
+-rw-r--r-- 1 root root 1720 Oct 25 10:21 a.txt
+
+block块：真正存储数据的地方
+逻辑删除： 
+为什么删除比复制快？
+
+误删除文件后，第一件事要做什么？？？  你不心删除把存了几十年的大片删除了。
+避免误删除的文件内容被覆盖。 如何避免？
+卸载需要恢复文件的分区或以只读的方式挂载
+
+5.2.2   实战：在ext4文件系统上恢复被误删除的文件
+下载extundelete
+http://sourceforge.net/    开源软件发布中心
+准备测试分区：
+[root@xuegod63 /]# fdisk /dev/sda  #创建一个sda4分区
+
+WARNING: DOS-compatible mode is deprecated. It's strongly recommended to
+         switch off the mode (command 'c') and change display units to
+         sectors (command 'u').
+
+Command (m for help): p   #查看现有分区表
+
+Disk /dev/sda: 21.5 GB, 21474836480 bytes
+255 heads, 63 sectors/track, 2610 cylinders
+Units = cylinders of 16065 * 512 = 8225280 bytes
+Sector size (logical/physical): 512 bytes / 512 bytes
+I/O size (minimum/optimal): 512 bytes / 512 bytes
+Disk identifier: 0x000b8b35
+
+   Device Boot      Start         End      Blocks   Id  System
+/dev/sda1   *           1          26      204800   83  Linux
+Partition 1 does not end on cylinder boundary.
+/dev/sda2              26        1301    10240000   83  Linux
+
+/dev/sda3            1301        1428     1024000   82  Linux swap / Solaris
+
+Command (m for help): n   #创建一个新分区
+Command action
+   e   extended
+   p   primary partition (1-4)
+p  #创建一个主分区
+Selected partition 4
+First cylinder (1428-2610, default 1428): 
+Using default value 1428
+Last cylinder, +cylinders or +size{K,M,G} (1428-2610, default 2610): +1G  #指定分区大小
+
+Command (m for help): w  #保存
+The partition table has been altered!
+
+Calling ioctl() to re-read partition table.
+
+WARNING: Re-reading the partition table failed with error 16: Device or resource busy.
+The kernel still uses the old table. The new table will be used at
+the next reboot or after you run partprobe(8) or kpartx(8)
+Syncing disks.
+[root@xuegod63 ~]#reboot
+或
+[root@xuegod63 ~]# partx -a /dev/sda  #获得新分区表
+扩展：
+如果在根下删除文件了，想恢复，怎么办？ 
+方法1： 立即断电，然后把磁盘以只读方式，挂载到另一个电脑中进行恢复
+方法2：把extundelete在虚拟机上（虚拟机系统要和服务器版本一样），提前安装好后再复制到U盘中，把U盘插入服务器，恢复时，恢复的文件要保存到U盘中，（不要让恢复的数据写到/下，那样会覆盖之前删除的文件）
+
+使用新的分区表：
+[root@xuegod63 /]# mkdir /tmp/sda4     #创建挂载点
+[root@xuegod63 ~]# mkfs.ext4 /dev/sda4    #格式化
+[root@xuegod63 ~]# mount /dev/sda4 /tmp/sda4/   #挂载
+
+5.2.3   复制一些测试文件，然后把这些文件再删除，然后演示恢复：
+[root@xuegod63 ~]# cp /etc/passwd /tmp/sda4/
+[root@xuegod63 ~]# cp /etc/hosts /tmp/sda4/
+[root@xuegod63 ~]# echo aaa > a.txt
+[root@xuegod63 ~]# mkdir -p /tmp/sda4/a/b/c
+[root@xuegod63 ~]# cp a.txt /tmp/sda4/a/
+[root@xuegod63 ~]# cp a.txt /tmp/sda4/a/b/
+[root@xuegod63 ~]# touch /tmp/sda4/a/b/kong.txt
+安装tree命令：
+[root@xuegod63 ~]# rpm -ivh /mnt/Packages/tree-1.5.3-2.el6.x86_64.rpm
+[root@xuegod63 ~]# tree /tmp/sda4/
+/tmp/sda4/
+├── a
+│   ├── a.txt
+│   └── b
+│       ├── a.txt
+│       ├── c  #空目录
+│       └── kong.txt  #空文件
+├── hosts
+├── lost+found
+└── passwd
+
+删除文件：
+[root@xuegod63 ~]# cd /tmp/sda4/
+[root@xuegod63 sda4]# ls
+a  hosts  lost+found  passwd
+[root@xuegod63 sda4]# rm -rf a hosts passwd 
+
+误删除文件后，第一件事要做什么？？？
+如何避免误删除的文件内容被覆盖？？？
+卸载需要恢复文件的分区：或以只读的方式挂载
+[root@localhost ~]#cd /root
+[root@localhost ~]# umount /tmp/sda4
+5.2.4  安装extundelet  
+上传extundelete到linux中：
+从windows上传extundelete文件到linux，安装xmanager  v5   或者ＣＲＴ
+[root@xuegod63 ~]# rpm -ivh /mnt/Packages/lrzsz-0.12.20-27.1.el6.x86_64.rpm  
+安装后，就有了ｒｚ命令和ｓｚ命令
+ｒｚ　：　上传windows中的文件到linux
+sz ：下载，将linux中的文件传到windows
+
+解压并安装extundelet
+[root@xuegod63 extundelete-0.2.4]# tar jxvf extundelete-0.2.4.tar.bz2 
+[root@xuegod63 ~]# cd extundelete-0.2.4
+[root@xuegod63]# yum install e2fsprogs-devel
+[root@xuegod63 extundelete-0.2.4]# ./configure   #检查系统安装环境
+[root@xuegod63 extundelete-0.2.4]# make  -j 4  #编译，把源代码编译成可执行的二进制文件。 
+-j 4   使用4进程同时编译，提升编译速度 或 使用4核CPU同时编译。
+[root@xuegod63 extundelete-0.2.4]# make install  #安装
+
+install 和cp 有什么区别？ 
+install 复制时可以指定权限  cp不可以
+例：
+[root@xuegod63 ~]# install -m 777 /bin/find /opt/a.sh
+[root@xuegod63 ~]# ll /opt/
+5.2.5  开始恢复：
+
+方法1：通过inode结点恢复
+方法二：通过文件名恢复
+方法三：恢复某个目录，如目录a下的所有文件：
+方法四：恢复所有的文件
+
+[root@xuegod63 ~]# umount /tmp/sda4/ 
+[root@xuegod63 ~]# mkdir test  #创建一个目录使用于存放恢复的数据
+[root@xuegod63 ~]# cd test/
+
+方法1：
+通过inode结点查看被删除的文件名字：
+[root@xuegod63 test]# extundelete /dev/sda4 --inode 2
+.                                                2
+lost+found                                        11
+passwd                                            12             Deleted
+hosts                                             13             Deleted
+a                                                 7313           Deleted
+扩展：ext4文件系统的分区根目录的inode值为2，xfs分区根目录的inode值为64
+[root@xuegod63 test]# ls -id /boot/   #xfs文件系统
+64 /boot/
+[root@xuegod63 test]# mount /dev/sda4 /tmp/sda4/
+[root@xuegod63 test]# ls -id /tmp/sda4/
+2 /tmp/sda4/
+[root@xuegod63 test]# umount /tmp/sda4/
+
+方法1：通过inode结点恢复
+[root@xuegod63 test]# extundelete /dev/sda4 --restore-inode 12
+NOTICE: Extended attributes are not restored.
+Loading filesystem metadata ... 9 groups loaded.
+Loading journal descriptors ... 63 descriptors loaded.
+
+[root@xuegod63 test]# ls 
+RECOVERED_FILES
+[root@xuegod63 test]# diff /etc/passwd RECOVERED_FILES/file.12  # 没有任何输出，说明一样
+方法二，通过文件名恢复
+[root@xuegod63 test]# extundelete /dev/sda4 --restore-file passwd
+[root@xuegod63 test]# diff /etc/passwd RECOVERED_FILES/passwd  # 没有任何输出，说明一样
+方法三：恢复某个目录，如目录a下的所有文件：
+[root@xuegod63 test]# extundelete /dev/sda4 --restore-directory a
+[root@xuegod63 test]# tree RECOVERED_FILES/a/
+RECOVERED_FILES/a/
+├── a.txt
+└── b
+└── a.txt
+下面是原来的目录结构：
+[root@xuegod63 ~]# tree /root/sda4-back/a/
+/root/sda4-back/a/
+├── a.txt
+└── b
+    ├── a.txt
+    ├── c
+└── kong.txt
+
+方法四：恢复所有的文件
+[root@xuegod63 test]# extundelete /dev/sda4 --restore-all
+删除前后的数据：
+
+
+

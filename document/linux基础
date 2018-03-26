@@ -1259,5 +1259,84 @@ RECOVERED_FILES/a/
 [root@xuegod63 test]# extundelete /dev/sda4 --restore-all
 删除前后的数据：
 
+6.查找用户帐户信息和登录详细信息的11种方法
+	1. id 命令
+		id 是用来展示一个实时活动用户以及组 ID 的命令行工具，如下所示：
+		$ id tecmint uid=1000(tecmint) gid=1000(tecmint)
+		groups=1000(tecmint),4(adm),24(cdrom),27(sudo),30(dip),46(plugdev),113(lpadmin),130(sambashare)
+	2. groups 命令
+		groups 命令可以被用来展示一个用户所归属的所有组的信息，像下面这样：
+		$ groups tecminttecmint : tecmint adm cdrom sudo dip plugdev lpadmin sambashare
+	3. finger 命令
+		finger 命令可以被用来查找 Linux 上的一个用户的信息。在许多 Linux 系统上，它并没被预装。
+		想要在你的系统上安装它，可以在终端里运行这个命令：
+		$ sudo apt install finger#Debian/Ubuntu
+		$ sudo yum install finger#RHEL/CentOS
+		$ sudo dnf install finger#Fedora 22+
+		它会显示出一个用户的真实名称、主目录、shell，登录的名称以及时间，还有如下所示的许多信息:
+		$ finger tecmintLogin: tecmint Name: TecMint
+		Directory: /home/tecmint Shell: /bin/bash
+		On since Fri Sep 22 10:39 (IST) on tty8 from :0
+		2 hours 1 minute idle
+		No mail.
+		No Plan.
+	4. getent 命令
+		getent 是一个可以从特定系统数据库的 Name Service Switch (NSS 名字服务交换器) 库获取到信息的命令行工具。
+		要获取一个用户账户的详细信息，可以像下面这样使用 passwd 数据库和 username 来做到。
+		$ getent passwd tecminttecmint:x:1000:1000:TecMint,,,:/home/tecmint:/bin/bash
+	5. grep 命令
+		grep 命令是一个强大的模式搜索工具，可以在绝大多数 Linux 系统上使用。你可以用它来从系统账户文件 /etc/passwd 中查找出
+		关于一个特定用户的信息，如下所示：
+		$ grep ‐i tecmint /etc/passwdtecmint:x:1000:1000:TecMint,,,:/home/tecmint:/bin/bash
+	6. lslogins 命令
+		lslogins 命令会展示出系统中现有用户的相关信息， -u 标记可用来标识只展示用户的账户。
+		$ lslogins ‐uUID USER PROC PWD‐LOCK PWD‐DENY LAST‐LOGIN GECOS
+		0 root 144 root
+		1000 tecmint 70 10:39:07 TecMint,,,
+		1001 aaronkilik 0
+		1002 john 0 John Doo
+	7. users 命令
+		users 命令会展示当前已经登录系统的所有用户的用户名，像这样：
+		$ userstecmint
+		aaron
+	8. who 命令
+		who 命令可以用来展示那些登录了系统的用户，包括了它们是从哪里连接到系统上来的终端信息。
+	9. w Command
+		w 命令会展示出所有登录了系统的用户，还有它们都做了些什么事情。
+		$ w12:46:54 up 2:10, 1 user, load average: 0.34, 0.44, 0.57
+		USER TTY FROM LOGIN@ IDLE JCPU PCPU WHAT
+		tecmint tty8 :0 10:39 2:10m 4:43 0.46s cinnamon‐sessio
+	10. last 或者 lastb 命令
+		last/lastb 命令会展示一个最近登录系统的用户列表。
+		$ last OR$ last ‐a #show hostname on the last column
+		最近登录系统的用户列表
+		tecmint tty8 Fri Sep 22 10:39 gone ‐ no logout :0
+		reboot system boot Fri Sep 22 10:36 still running 4.4.0‐21‐generic
+		tecmint tty8 Thu Sep 21 10:44 ‐ down (06:56) :0
+		reboot system boot Thu Sep 21 10:42 ‐ 17:40 (06:58) 4.4.0‐21‐generic
+		tecmint tty8 Wed Sep 20 10:19 ‐ down (06:50) :0
+		reboot system boot Wed Sep 20 10:17 ‐ 17:10 (06:52) 4.4.0‐21‐generic
+		tecmint pts/14 Tue Sep 19 15:15 ‐ 15:16 (00:00) tmux(14160).%146
+		tecmint pts/13 Tue Sep 19 15:15 ‐ 15:16 (00:00) tmux(14160).%145
+		...
+		要是想显示那些在特定时间访问过系统的用户，可以像下面这样使用 -p 选项:
+		$ last ‐ap nowtecmint tty8 Fri Sep 22 10:39 gone ‐ no logout :0
+		reboot system boot Fri Sep 22 10:36 still running 4.4.0‐21‐generic
+		wtmp begins Fri Sep 1 16:23:02 2017
+		11. lastlog 命令
+		lastlog 命令可以用来查找最近登录那些或者某个特定用户的详细信息，如下所示：
+		$ lastlog OR$ lastlog ‐u tecmint #show lastlog records for specific user tecmint
+		最近登录用户的记录：
+		Username Port From Latest
+		root **Never logged in**
+		kernoops **Never logged in**
+		pulse **Never logged in**
+		rtkit **Never logged in**
+		saned **Never logged in**
+		usbmux **Never logged in**
+		mdm **Never logged in**
+		tecmint pts/1 127.0.0.1 Fri Jan 6 16:50:22 +0530 2017
+		..
+
 
 

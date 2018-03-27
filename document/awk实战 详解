@@ -1,0 +1,133 @@
+1.特殊模式BEGIN和END
+    awk 指令的通用语法
+        awk 'script' filename
+    script的语法形式：
+        /pattern/ {actions}
+    你通常会发现脚本中的模式（/pattern/）是一个正则表达式，此外，你也可以在这里用特殊模式 BEGIN 和 END。因此，我们也能
+按照下面的形式编写一条 awk 命令：
+    awk '
+    BEGIN { actions }
+    /pattern/ { actions }
+    /pattern/ { actions }
+    ……….
+    END { actions }
+    ' filenames
+    假如你在 awk 脚本中使用了特殊模式：BEGIN 和 END，以下则是它们对应的含义：
+        BEGIN 模式：是指 awk 将在读取任何输入行之前立即执行 BEGIN 中指定的动作。
+        END 模式：是指 awk 将在它正式退出前执行 END 中指定的动作。
+    含有这些特殊模式的 awk 命令脚本的执行流程如下：
+        1. 当在脚本中使用了 BEGIN 模式，则 BEGIN 中所有的动作都会在读取任何输入行之前执行。
+        2. 然后，读入一个输入行并解析成不同的段。
+        3. 接下来，每一条指定的非特殊模式都会和输入行进行比较匹配，当匹配成功后，就会执行模式对应的动作。对所有你指定的模式重复此执行该步骤。
+        4. 再接下来，对于所有输入行重复执行步骤 2 和 步骤 3。
+        5. 当读取并处理完所有输入行后，假如你指定了 END 模式，那么将会执行相应的动作。
+        
+    实例：我们希望统计出 domains.txt 文件中域名 tecmint.com 出现的次数
+        #!/bin/bash
+        for file in $@; do
+        if [ ‐f $file ] ; then
+        ### 输出文件名
+        echo "File is: $file"
+        ### 输出一个递增的数字记录包含 tecmint.com 的行数
+        awk '/^tecmint.com/ { counter+=1 ; printf "%s\n", counter ; }' $file
+        else
+        ### 若输入不是文件，则输出错误信息
+        echo "$file 不是一个文件，请指定一个文件。" >&2 && exit 1
+        fi
+        done
+        ### 成功执行后使用退出代码 0 终止脚本
+        exit 0
+        
+        现在让我们像下面这样在上述脚本的 awk 命令中应用这两个特殊模式：BEGIN 和 END：
+        我们应当把脚本：
+            awk '/^tecmint.com/ { counter+=1 ; printf "%s\n", counter ; }' $file
+        改成：
+            awk ' BEGIN { print "文件中出现 tecmint.com 的次数是：" ; }
+            /^tecmint.com/ { counter+=1 ; }
+            END { printf "%s\n", counter ; }
+            ' $file
+        在修改了 awk 命令之后，现在完整的 shell 脚本就像下面这样：
+            #!/bin/bash
+            for file in $@; do
+            if [ ‐f $file ] ; then
+            ### 输出文件名
+            echo "File is: $file"
+            ### 输出文件中 tecmint.com 出现的总次数
+            awk ' BEGIN { print "文件中出现 tecmint.com 的次数是：" ; }
+            /^tecmint.com/ { counter+=1 ; }
+            END { printf "%s\n", counter ; }
+            ' $file
+            else
+            ### 若输入不是文件，则输出错误信息
+            echo "$file 不是一个文件，请指定一个文件。" >&2 && exit 1
+            fi
+            done
+            ### 成功执行后使用退出代码 0 终止脚本
+            exit 0
+        当我们运行上面的脚本时，它会首先输出 domains.txt 文件的位置，然后执行 awk 命令脚本，该命令脚本中的特殊模式 BEGIN 将
+        会在从文件读取任何行之前帮助我们输出这样的消息“文件中出现 tecmint.com 的次数是：”。
+        接下来，我们的模式 /^tecmint.com/ 会在每个输入行中进行比较，对应的动作 { counter+=1 ; } 会在每个匹配成功的行上执行，
+        它会统计出 tecmint.com 在文件中出现的次数。
+        最终，END 模式将会输出域名 tecmint.com 在文件中出现的总次数。
+        $ ./script.sh ~/domains.txt
+
+2.awk(报告生成器),grep(文本过滤器),sed(流编辑器)
+    2.1 grep
+        2.1.1 egrep,grep,fgrep
+        文本查找的需要
+            grep：根据模式搜索文本，并将符合模式的文本行显示出来。
+            pattern：文本符和正则表达式的元字符组合而成的匹配条件
+            grep [option] "pattern" file
+            grep root /etc/passwd
+            ‐i：忽略大小写
+            ‐‐color：匹配的字符高亮显示 alias
+            alias grep='grep ‐‐color'
+            ‐v:反向查找
+            ‐o：只显示被模式匹配的字符串（不显示行）
+        2.2.2 globbing
+            *：任意长度的任意字符     ？：任意单个字符       []:任意一个字符         [^]:其中任意一个非
+            元字符：
+                .:匹配任意单个字符       []:匹配指定范围内的任意字符       [^]:匹配指定范围内的任意单个字符    [:digit:][:lower:][:upper:] []
+            字符匹配次数：
+                *：表示匹配前面的字符任意次（0‐inf）   eg：a*b     a.*b
+            .*:表示任意长度的，任意字符
+            工作在贪婪模式
+            \?:匹配其前面的字符一个或0次。
+            部分匹配
+                a?b         \{m,n\}:匹配其前的字符至少m，至多n次。       \{1,\}        \{0,3\}         a\{1,3\}      a.\{1,3\}
+        2.1.3 位置锚定：
+            ^:锚定行首，此字符后面的任意内容必须出现在行首。
+                grep "^root" /etc/passwd
+            $:锚定行尾，此字符前面的任意内容必须出现在行尾。
+                grep "bash$" /etc/passwd
+            ^$:空白行
+                grep '^$' /etc/passwd
+            数字:
+                [0‐9]:
+                grep "[[:space:]][[:digit:]]$"
+                r555t
+            锚定单词：
+                \<或\b:其后面的任意字符必须出现在行首
+                \>或\b:其前面的任意字符必须出现在行尾。
+                This is root.
+                The user is mroot
+                rooter is dogs name.
+                chroot is a command.
+                grep "root\>" test.txt
+                grep "\<root" test.txt
+                grep "\<root\>" test.txt
+3.awk数组命令经典生产实战
+    3.1 统计apache日志单ip访问请求数排名
+        假设apache日志内容access.log内容为：
+        10.0.0.41 - - [03/Dec/2010:23:27:01 +0800] "HEAD /checkstatus.jsp HTTP/1.0" 200 -
+        法一：[root@oldboy /]# awk '{++S[$1]} END {for (oldboy in S) print oldboy ,S[oldboy]}' access.log |sort -rn -k2
+             #提示 $1为第一个域的内容。-k2 为对第二个字段排序，即对数量排序。
+        法2：[root@oldboy /]# awk '{print $1}' access.log|sort|uniq -c |sort -rn -k1
+        法3：[root@oldboy /]# sed's/- -.*$//g' access.log|sort|uniq -c|sort -rn -k1
+    3.2 统计服务器当前单IP连接数最大的IP地址前十
+        实际生产中，我们过滤出已经建立连接的状态ESTABLISHED，然后，应用上述命令处理，完整命令可能为：
+        netstat -an|awk-F '[ :]+' '{++S[$6]} END {for (a in S) print a ,S[a]}'|sort -rn -k2
+        
+        netstat -an|grep EST|awk-F '[ :]+' '{++S[$6]} END {for (key in S) print "ip:"key"----->",S[key]}'|sort -rn -k2
+        注意，这里过滤的是已经建立连接的的连接，即状态ESTABLISHED。
+4.

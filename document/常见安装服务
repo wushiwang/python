@@ -1,0 +1,76 @@
+1.centos7.3下配置LAMP部署WordPress博客
+  在同一台主机上搭建，首先需要安装的软件包Apache 、MariaDB 、PHP
+  一、安装LAMP 这里我们采用yum的方式
+      yum install httpd mariadb‐server php php‐mysql ‐y
+  二、创建虚拟主机
+      1、虚拟主机配置文件
+      2、创建所需的目录
+      mkdir /var/www/wordpress
+  三.在虚拟主机主目录/var/www/wordpress下新建index.php文件
+      <?php
+      phpinfo();
+      ?>
+  四、启动httpd服务
+    systemctl start httpd
+  五、测试
+  六、解压 wordpress 4.7并把解压的wordpress复制到/var/www/wordpress
+  七、通过浏览器访问wordpress
+      主意：
+      注意：配置DNS服务器解析www.test.com 为192.168.23.144 或者 修改windows 下的C:\Windows\Systeme32\drivers\etc\hosts文件
+      192.168.23.144 www.test.com
+  八、修改wordpress 配置文件复制cp wp-config-sample.php模板文件为 wp-config.php，然后编辑
+      vim /var/www/wordpress/wordpress/wp‐config.php
+
+2.CentOS7部署vsftpd服务
+    1、查看是否已经安装了vsftpd
+        vsftpd ‐version
+    2、安装vsftpd（CentOS7）
+        yum install ‐y vsftpd
+    3、新建FTP目录
+        创建的FTP目录如下：
+        /data/KodServer/data/User/tomas/home
+    4、创建新用户
+        ftpname为你为该ftp创建的用户名，/data/KodServer/data/User/tomas/home 为登录进去后的位置
+        useradd ‐d /data/KodServer/data/User/tomas/home ‐s /bin/bash ftpname
+    5、为新建的用户设置密码
+        passwd ftpname
+        【备注：用cat etc/passwd可以查看当前系统用户】
+    6、设置主目录（更改登录时看到的目录，看个人需要更改，如果第4步已设置好，此步可忽略）
+        usermod ‐d /data/KodServer/data/User/tomas/home ftpname
+    7、添加用户组（这步可忽略）
+        groupadd ftpgroup
+    8、防火墙添加FTP服务
+        firewall‐cmd ‐‐permanent ‐‐zone=public ‐‐add‐service=ftp
+        firewall‐cmd ‐‐reload
+        解决办法：
+        ①、查看ftp的Selinux状态：sestatus -b | grep ftp
+        ②、在结果中可以看到： ftp_home_dir off
+        ③、将状态改为on：setsebool -P ftp_home_dir on
+        ④、重启vsftp服务：systemctl restart vsftpd.service
+        setsebool ‐P ftpd_full_access on
+        systemctl restart firewalld.service
+    9、配置只能访问自身目录（/data/KodServer/data/User/tomas/home），不能访问其他路径
+        修改/etc/vsftpd.conf
+        cd /etc/vsftpd/
+        vi vsftpd.conf
+        #去掉前面的注释
+        chroot_local_user=YES
+        ascii_upload_enable=YES
+        ascii_download_enable=YES
+        #文件末尾添加
+        allow_writeable_chroot=YES
+        保存，重启vsftpd
+        设置开机启动：
+        systemctl enable vsftpd.service
+        启动vsftpd服务
+        systemctl start vsftpd.service
+        禁止ftp用户通过22端口登录ftp服务器：
+        由于需要限制ftp用户在自己的目录，在21端口下没有问题，但当ftp用户用sftp登录时，还是可以访问上级目录，于是禁止ftp用户
+        ssh登录，切断22端口的通信。
+        首先，执行如下命令，找到nologin的shell：
+        vi /etc/shells
+        可以看到禁止登录的shell文件为/usr/sbin/nologin，然后执行如下命令：
+        usermod ‐s /usr/sbin/nologin tomas
+        如果要恢复tomas的ssh登录，执行如下命令：
+        usermod ‐s /bin/bash tomas
+3.

@@ -2655,5 +2655,1204 @@ MIDDLEWARE = [
             }
     </script>
 
-16.
-17.
+16.Django关于禁用csrf和使用csrf操作
+      1. 基本使用
+          form表单中添加
+              {% csrf_token %}
+     2. 全站禁用
+          # 'django.middleware.csrf.CsrfViewMiddleware',
+     3. 局部禁用
+          'django.middleware.csrf.CsrfViewMiddleware',# 不注释
+          from django.views.decorators.csrf import csrf_exempt
+          @csrf_exempt
+          def csrf1(request):
+              if request.method == 'GET':
+                  return render(request,'csrf1.html')
+              else:
+                  return HttpResponse('ok')
+     4. 局部使用
+          # 'django.middleware.csrf.CsrfViewMiddleware', # 需要注释这一句话
+          from django.views.decorators.csrf import csrf_exempt,csrf_protect
+          @csrf_protect
+          def csrf1(request):
+              if request.method == 'GET':
+                  return render(request,'csrf1.html')
+              else:
+                  return HttpResponse('ok')
+     5. CBV模式局部禁用
+          from django.utils.decorators import method_decorator
+          from django.views.decorators.csrf import csrf_exempt, csrf_protect
+          from django.shortcuts import render, HttpResponse
+          from django.views import View
+          class Cs(View):
+              # @method_decorator(csrf_exempt) 建议用这个，具体原因后续再讲
+              @csrf_exempt
+              def dispatch(self, request, *args, **kwargs):
+                  return super().dispatch(request, *args, **kwargs)
+
+              def get(self, request, *args, **kwargs):
+                  return HttpResponse('GET，响应内容')
+
+              def post(self, request, *args, **kwargs):
+                  return HttpResponse('Post，响应内容')
+     6. CBV 局部使用
+          from django.views.decorators.csrf import csrf_exempt, csrf_protect
+          from django.utils.decorators import method_decorator
+          from django.shortcuts import render, HttpResponse
+          from django.views import View
+          class Cs(View):
+              # @method_decorator(csrf_exempt)
+              @method_decorator(csrf_protect)
+              def dispatch(self, request, *args, **kwargs):
+                  return super().dispatch(request, *args, **kwargs)
+              def get(self, request, *args, **kwargs):
+                  return HttpResponse('GET，响应内容')
+              def post(self, request, *args, **kwargs):
+                  return HttpResponse('Post，响应内容')
+     7. 关于method_decorator的使用
+          name这个参数是必备的，是为了装饰类中的get方法还是post方法。。。等等
+          from django.utils.decorators import method_decorator
+          def test(func):  # 装饰器
+              def inner(*args, **kwargs):
+                  print('hello,23232323')
+                  return func(*args, **kwargs)
+              return inner
+          @method_decorator(test, name='get')
+          class Cs(View):
+              # @method_decorator(csrf_exempt)
+              # @method_decorator(csrf_protect)
+              def dispatch(self, request, *args, **kwargs):
+                  return super().dispatch(request, *args, **kwargs)
+              def get(self, request, *args, **kwargs):
+                  return HttpResponse('GET，响应内容')
+              def post(self, request, *args, **kwargs):
+                  return HttpResponse('Post，响应内容')
+17.Django自定义用户认证
+      Django附带的认证对于大多数常见情况来说已经足够了,但是如何在 Django 中使用自定义的数据表进行用户认证，有一种较为笨蛋的办法就是自定义好
+  数据表后，使用 OnetoOne 来跟 Django 的表进行关联，类似于这样：
+     from django.contrib.auth.models import User
+     class UserProfile(models.Model):
+         """
+         用户账号表
+         """
+         user = models.OneToOneField(User)
+         name = models.CharField(max_length=32)
+         def __str__(self):
+             return self.name
+         class Meta:
+             verbose_name_plural = verbose_name = "用户账号"
+             ordering = ['id']
+     这样做虽然可以简单、快速的实现，但是有一个问题就是我们在自己的表中创建一个用户就必须再跟 admin 中的一个用户进行关联，这简直是不可以忍受的。
+      admin代替默认User model
+
+    写我们自定义的 models 类来创建用户数据表来代替默认的 User model ，而不与 django admin 的进行关联，相关的官方文档在这里
+     from django.db import models
+     from django.contrib.auth.models import User
+     from django.contrib.auth.models import (
+         BaseUserManager, AbstractBaseUser
+     )
+
+     class UserProfileManager(BaseUserManager):
+         def create_user(self, email, name, password=None):
+             """
+             用户创建，需要提供 email、name、password
+             """
+             if not email:
+                 raise ValueError('Users must have an email address')
+
+             user = self.model(
+                 email=self.normalize_email(email),
+                 name=name,
+             )
+
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+
+    def create_superuser(self, email, name, password):
+        """
+        超级用户创建，需要提供 email、name、password
+        """
+        user = self.create_user(
+            email,
+            password=password,
+            name=name,
+        )
+        user.is_admin = True
+        user.is_active = True
+        user.save(using=self._db)
+        return user
+
+     class UserProfile(AbstractBaseUser):
+         # 在此处可以配置更多的自定义字段
+         email = models.EmailField(
+             verbose_name='email address',
+             max_length=255,
+             unique=True,
+         )
+         name = models.CharField(max_length=32, verbose_name="用户名称")
+         phone = models.IntegerField("电话")
+         is_active = models.BooleanField(default=True)
+         is_admin = models.BooleanField(default=False)
+         objects = UserProfileManager()
+         USERNAME_FIELD = 'email'  # 将email 作为登入用户名
+         REQUIRED_FIELDS = ['name', 'phone']
+         def __str__(self):
+             return self.email
+         def get_full_name(self):
+             # The user is identified by their email address
+             return self.email
+         def get_short_name(self):
+             # The user is identified by their email address
+             return self.email
+         def has_perm(self, perm, obj=None):
+             "Does the user have a specific permission?"
+             # Simplest possible answer: Yes, always
+             return True
+         def has_module_perms(self, app_label):
+             "Does the user have permissions to view the app `app_label`?"
+             # Simplest possible answer: Yes, always
+             return True
+         @property
+         def is_staff(self):
+             "Is the user a member of staff?"
+             # Simplest possible answer: All admins are staff
+             return self.is_admin
+     admin 配置
+
+     class UserCreationForm(forms.ModelForm):
+         """A form for creating new users. Includes all the required
+         fields, plus a repeated password."""
+         password1 = forms.CharField(label='Password', widget=forms.PasswordInput)
+         password2 = forms.CharField(label='Password confirmation', widget=forms.PasswordInput)
+
+         class Meta:
+             model = models.UserProfile
+             fields = ('email', 'name')
+
+         def clean_password2(self):
+             password1 = self.cleaned_data.get("password1")
+             password2 = self.cleaned_data.get("password2")
+             if password1 and password2 and password1 != password2:
+                 raise forms.ValidationError("Passwords don't match")
+             return password2
+
+         def save(self, commit=True):
+             user = super(UserCreationForm, self).save(commit=False)
+             user.set_password(self.cleaned_data["password1"])
+             if commit:
+                 user.save()
+             return user
+
+
+     class UserChangeForm(forms.ModelForm):
+         """A form for updating users. Includes all the fields on
+         the user, but replaces the password field with admin's
+         password hash display field.
+         """
+         password = ReadOnlyPasswordHashField()
+
+         class Meta:
+             model = models.UserProfile
+             fields = ('email', 'password', 'name', 'is_active', 'is_admin')
+
+         def clean_password(self):
+             return self.initial["password"]
+
+
+     class UserProfileAdmin(BaseUserAdmin):
+         form = UserChangeForm
+         add_form = UserCreationForm
+
+         list_display = ('email', 'name', 'is_admin', 'is_staff')
+         list_filter = ('is_admin',)
+         fieldsets = (
+             (None, {'fields': ('email', 'password')}),
+             ('Personal info', {'fields': ('name',)}),
+             ('Permissions', {'fields': ('is_admin', 'is_active', 'roles', 'user_permissions', 'groups')}),
+         )
+         add_fieldsets = (
+             (None, {
+                 'classes': ('wide',),
+                 'fields': ('email', 'name', 'password1', 'password2')}
+              ),
+         )
+         search_fields = ('email',)
+         ordering = ('email',)
+         filter_horizontal = ('groups', 'user_permissions','roles')
+     2.Django允许您通过 AUTH_USER_MODEL 配置来引用自定义的 model 设置来覆盖默认 User 模型，这个配置的配置方法为在 settings 中加入： 
+     AUTH_USER_MODEL = "APP.model_class" ，例如本例中我们需要在 setting 中加入以下配置:
+     AUTH_USER_MODEL = "app1.UserProfile"
+     3.部署
+     python manage.py makemigrations
+     python manage.py migrate
+         创建一个新用户,此时我们就可以用这个用户来登录 admin 后台了
+         python manage.py createsuperuser
+     效果如下：
+     自定义认证
+     那如果我们需要使用我们自己的认证系统呢，假如我们有一个 login 页面和一个 home 页面：
+     from django.shortcuts import render, HttpResponse, redirect
+     from django.contrib.auth import authenticate,login,logout
+     from app1 import models
+     from django.contrib.auth.decorators import login_required
+     def auth_required(auth_type):
+         # 认证装饰器
+         def wapper(func):
+             def inner(request, *args, **kwargs):
+                 if auth_type == 'admin':
+                     ck = request.COOKIES.get("login")  # 获取当前登录的用户
+                     if request.user.is_authenticated() and ck:
+                         return func(request, *args, **kwargs)
+                     else:
+                         return redirect("/app1/login/")
+             return inner
+         return wapper
+     def login_auth(request):
+         # 认证
+         if request.method == "GET":
+             return render(request, 'login.html')
+         elif request.method == "POST":
+             username = request.POST.get('username', None)
+             password = request.POST.get('password', None)
+             user = authenticate(username=username, password=password)
+             if user is not None:
+                 if user.is_active:
+                     login(request, user)
+                     _next = request.GET.get("next",'/crm')
+                     return redirect('_next')
+                 else:
+                     return redirect('/app1/login/')
+             else:
+                 return redirect('/app1/login/')
+         else:
+             pass
+     def my_logout(request):
+         # 注销
+         if request.method == 'GET':
+             logout(request)
+             return redirect('/app1/login/')
+
+     @login_required
+     def home(request):
+         # home page
+         path1, path2 = "Home", '主页'
+         if request.method == "GET":
+             return render(request, 'home.html', locals())
+         elif request.method == "POST":
+             pass
+18.django send_mail功能
+      我们知道python中smtplib模块用于邮件的功能，而django对这个这模块进行封装，使得它使用起来十分简单。 django.core.mail就是django邮件
+   的核心模块。
+     两个常用函数
+     它提供了两个函数，使用起来十分的简单：
+     def send_mail(subject, message, from_email, recipient_list,fail_silently=False, auth_user=None, auth_password=None,
+                   connection=None, html_message=None):
+         pass          
+     def send_mass_mail(datatuple, fail_silently=False, auth_user=None,auth_password=None, connection=None):
+         pass
+
+     # 参数介绍   
+     # subject: 邮件主题  
+     # message: 邮件内容  
+     # from_email: 发件人  
+     # recipient_list: 收件人，这是一个列表，可以有多个收件人  
+     # 以上4个在参数 在send_mass_mail中，会写在datatuple这个元组中  
+     # fail_silently: 是否报错，True的话表忽略异常  
+     # auth_user&auth_password:账号密码  
+     # connection: 表示这个的链接对象，后续会提到  
+     # html_message: send_mail方法独有，可以比较简单地实现一个html文本的传输，具体我也没使用过，不是很了解。
+
+     一般情况下，我们需要在setting中进行配置，除了必须配置的host和port,一般我们也将账号密码写在这里，这样每次调用函数就不用
+     传递这两个参数，当不传递这两个值，他们就会默认去读取setting中的值
+
+     返回值是成功发送了多个message，而不是多少个人，一般使用send_mail，都返回1
+
+     # settings.py
+     # 我使用的是新浪的，host可以在对应邮箱的设置中找到
+     EMAIL_HOST = 'smtp.sina.com'
+     EMAIL_PORT = 25
+     # 你的邮箱账号与密码
+     EMAIL_HOST_USER = 'viptestfordjango@sina.com'
+     EMAIL_HOST_PASSWORD = '******'
+     # 由于使用25端口，一般都不使用TLS机密，SSL和TSL只需要设置一个，他们同时为True或False
+     EMAIL_USE_TLS = False
+     # 发件人，只有这个变量名可以自己自定义，设置在这里是为了减少每次去写
+     EMAIL_FROM = 'viptestfordjango@sina.com'
+     实例
+     from django.core.mail import send_mail, send_mass_mail
+     from string import lowercase,uppercase,digits
+     from random import randint
+     from project.settings import EMAIL_FROM
+     def send_code_email(email)：
+         """
+         发送验证码
+         """
+         # 0-9 a-z A-z
+         code = ''
+         seeds= lowercase+uppercase+digits
+         length = len(seeds)
+         # 生成4位验证码
+         for i in range(4):
+             code += seeds[randint(0, length-1)]
+         send_title = '重置密码'
+         send_message = '你的验证码是:{0}。'.format(code)
+         send_status = send_mail(email_title, email_body, EMAIL_FROM, [email])
+     def send_hello_email(email1, email2):
+         """
+         给email1发送 新年好
+         给email2发送 Happy New Year
+         """
+         # message格式(subject, message, from_email, recipient_list)
+         message1 = ('新年好', '新年好', 'EMAIL_FROM', [email])
+         message2 = ('Happy New Year', 'Happy New Year', EMAIL_FROM, [email2])
+         send_status=send_mass_mail((message1, message2), fail_silently=False)
+
+     很明显可以看出2个函数的不同，send_mail一次发送一个message(给多人)，而send_mass_mail一次可以发送不同的message(给多人)。
+     更深层的理解，前面提高一个参数connection，结合这个参数，其实每建立一个连接，send_mail只发送一种message，而send_mass_mail
+     建立一个连接，可以发送多个message，这样子，效率明显高很多。
+     
+     高级功能
+     前面2个函数其实是对EmailMessage这个类进行封装，使他们使用起来，相当的简单，但它们的功能是十分有限的，例如，无法抄送(cc)或者私密
+     发送(bcc)以及无法加入附件(attachments)
+     如果要是用刚刚说的功能，就必须直接使用EmailMessage这个类。
+     EmailMessage
+
+     # 类定义
+     class EmailMessage(object):
+         def __init__(self, subject='', body='', from_email=None, to=None, bcc=None,connection=None, attachments=None, 
+         headers=None, cc=None, reply_to=None):
+         pass
+
+     # 使用
+     from django.core.mail import EmailMessage
+     email = EmailMessage(
+         'Hello',
+         'Body goes here',
+         'from@example.com',
+         ['to1@example.com', 'to2@example.com'],
+         ['bcc@example.com'],
+         reply_to=['another@example.com'],
+         headers={'Message-ID': 'foo'},
+     )
+
+     这个类参数中，抄送cc,私密发送bcc,回复reply_to都是一个列表。
+     值得一提的是attachments，它也是一个列表，它的元素始：MIMEBase对象或者(filename, content, mimetype)这个元组，
+     即包括显示的文件名，文件数据，文件类型。
+
+     它还提供一些方法，主要提2个：send()发送邮件，以及attach()添加附件
+     直接使用Backend
+     如果我们像上面那样直接去调用EmailMessage.send()，这样一次连接connection就只会发送一个message，那么如果我想发送多个message呢?
+     这个时候我们就有必要去了解backend了
+     其实django sending_email功能是由backend的控制的，这个类提供几个方法：
+     open(): 开个一个连接
+     close(): 关闭这个连接
+     send_messages(email_messages): 接受一个EmailMessage对象的列表，然后将多个信息发送出去，而EmailMessage的send()方法就是调用这个方法，
+     只是传递的参数是[self],就只有一个对象。
+
+     那么，其实如果我们能控制connection的开关，那么我们就能实现多个EmailMessage对象在email发送出去，这个时候，我们考虑通过上下文自动控制打开
+     关闭操作的方式:
+
+     from django.core import mail
+     with mail.get_connection() as connection:
+         mail.EmailMessage(
+             subject1, body1, from1, [to1],
+             connection=connection,
+         ).send()
+         mail.EmailMessage(
+             subject2, body2, from2, [to2],
+             connection=connection,
+         ).send()
+     这样的方法显得有点笨拙，我们肯定希望能够使用send_messages(),直接传递一个EmailMessage对象的列表给它。我们注意到上面的代码
+     get_connection()函数，其实它就是能够直接去获取到一个backend的对象，然后通过直接调用这个send_messages()方法。
+
+     from django.core import mail
+     connection = mail.get_connection()
+     # get_EmailMessage_list返回一个EmailMessage对象的列表
+     messages = get_EmailMessage_list()
+     connection.send_messages(messages)
+     这个直接调用send_messages(messages)，如果此时没有open链接的话，它会先打开连接，执行关自动关闭。
+     这样子好像还有点不灵活，那也可以亲自控制open与close!
+     from django.core import mail
+     connection = mail.get_connection()
+     connection.open()
+     email1 = mail.EmailMessage(
+         'Hello',
+         'Body goes here',
+         'from@example.com',
+         ['to1@example.com'],
+         connection=connection,
+     )
+     email1.send() 
+
+     email2 = mail.EmailMessage(
+         'Hello',
+         'Body goes here',
+         'from@example.com',
+         ['to2@example.com'],
+     )
+     email3 = mail.EmailMessage(
+         'Hello',
+         'Body goes here',
+         'from@example.com',
+         ['to3@example.com'],
+     )
+     connection.send_messages([email2, email3])
+     connection.close()
+     这个例子使用EmailMessage.send()与connection.send_messages()的使用，这个只是展示作用，并没用必要同时使用
+     backend类型与定制
+     说了那么多的backend，那它到底是什么，其实默认的它就是：backends.smtp.EmailBackend
+     # 在django.core.mail。backends.smtp.下
+     class EmailBackend(BaseEmailBackend):
+         def __init__(self, host=None, port=None, username=None, password=None,
+                      use_tls=None, fail_silently=False, use_ssl=None, timeout=None,
+                      ssl_keyfile=None, ssl_certfile=None,**kwargs):
+             pass
+     就是这个类，它继承BaseEmailBackend了，是默认的backend，控制了整个send mail的过程，当然django还提供了其他backend，不过作用不是很大。
+     Console backend: 将邮件直接写到你的stdout中。
+     Dummy backend: 没有实际作用。
+     你只需要在setting中指定你的backend:
+     EMAIL_BACKEND = 'django.core.mail.backends.dummy.EmailBackend'
+     当然，还可以自定义backend，你需要继承BaseEmailBackend，并且实现send_messages(email_messages),open,close方法，不过我感觉没有这个必要，
+     毕竟smtp.EmailBackend提供了较为完善的功能了。
+19.django-crontab实现定时任务
+      今天打算在自己的 Django 应用中添加一个定时任务来定时执行一些定期检查的功能，因此想到了使用 django-crontab 插件可以满足我的需求，
+  下面就是这个插件的使用方法。
+     首先使用pip安装 django-crontab 插件
+     pip install django-crontab
+     创建要定期执行的脚本和方法，这里假设脚本名称叫cron.py，内容如下：
+     #!/usr/bin/env python
+     # -*- coding: utf-8 -*-
+     def check():
+         print "hello django-crontab"
+     然后在自己应用的 settings.py 文件中添加这个app
+     INSTALLED_APPS = (
+         ...
+         'django_crontab',
+     )
+     同时在 settings.py 文件中添加 CRONJOBS 配置，内容如下：
+     CRONJOBS = [
+         ('*/1 * * * *', 'cron.check','>>/tmp/test.log')
+     ]
+     其中：
+     - 第一个参数是 cron 表达式，定义定时任务的执行时间。
+     - 第二个参数是要执行的模块和函数。
+     - 第三个参数是执行定时脚本时日志文件的路径。
+     定义了定时任务和脚本，下面看看怎样使其生效。
+     首先查看一下系统中已有的 cron job
+     python manage.py crontab show 
+     添加和修改 cron job
+     python manage.py crontab add
+     删除 cron job
+     python manage.py crontab remove
+20.Django admin组件原理分析与扩展使用之sites.py
+      一 、 前言 
+          Django 提供了admin 组件 为项目提供基本的管理后台功能（对数据表的增删改查）。
+          本篇文章通过 admin源码 简单分析admin 内部原理 ，扩展使用方式，为以后进行定制和自己开发组件做铺垫。
+     二、 简单使用
+     1.在app 目录下的admin.py 中通过注册表
+          from django.contrib import admin
+          from blog01.models import *
+          admin.site.register([UserInfo,User,Blog])
+          # 或者通过 @admin.register 装饰器实现
+     2. 创建root用户
+          python manage.py createsuperuser
+          #输入用户名
+          #输入密码
+          #再次输入密码
+     3. 登录admin后台进行管理
+          浏览器访问 http://127.0.0.1/admin/ 
+     三、admin简单分析
+     1. admin 是一个Django 提供的后台管理app，功能也比较强大，在敏捷开发的过程中可以考虑直接使用。
+          但是面对复杂的业务情况，要实现更高的定制，必然要求我们实现自己的admin组件，这样面对各种情况我们才能游刃有余。
+     2. admin  是通过”注册“类自动生成url，执行对应的视图函数，提供友好可视化界面，实现增删改查功能。
+     3. admin  内部 url 列表
+          url(r'^$', wrap(self.index), name='index'),
+          url(r'^login/$', self.login, name='login'),
+          url(r'^logout/$', wrap(self.logout), name='logout'),
+          url(r'^password_change/$', wrap(self.password_change, cacheable=True), name='password_change'),
+          url(r'^password_change/done/$', wrap(self.password_change_done, cacheable=True),name='password_change_done'),
+          url(r'^jsi18n/$', wrap(self.i18n_javascript, cacheable=True), name='jsi18n'),
+          url(r'^r/(?P<content_type_id>\d+)/(?P<object_id>.+)/$', wrap(contenttype_views.shortcut),name='view_on_site'),#将我们表格生成url
+     4. 注册类生成的url
+          127.0.0.1/admin/appname/classname/           #查看数据
+          127.0.0.1/admin/appname/classname/add        #增加数据
+          127.0.0.1/admin/appname/classname/id/delete  #删除数据
+          127.0.0.1/admin/appname/classname/id/change  #更新数据
+          127.0.0.1/admin/appname/classname/id/history #历史记录
+     四、 admin 流程分析之sites.py 分析
+     1.从目录开始
+          下图是django.contrib.admin 目录。可以看见熟悉的static，templates，views，migrations目录，说明admin 是一个app。
+     2. 从 admin.site.register( model_or_iterable, admin_class=None,) 分析
+          admin  是什么？
+          是一个后台管理app
+          site 是什么？
+          点开发现是来自sites.py 中的一个实例，代表当前admin站点，也就是通过模块导入方式实现的单例模式。下面为site.py 中源码，后续如不说明
+          ，均为admin源码材料。
+          # This global object represents the default admin site, for the common case.
+          # You can instantiate AdminSite in your own code to create a custom admin site.
+          # 这个全局对象代表了在一般情况下的默认admin 站点
+          # 你可以在你自己的代码中实例化AdminSite来创造一个自定义的admin 站点
+          site = AdminSite()
+          register 是什么？
+          是site的一个方法，也就是site的类AdminSite的一个方法，
+          def register(self, model_or_iterable, admin_class=None, **options):
+               '''Registers the given model(s) with the given admin class.
+                  The model(s) should be Model classes, not instances.
+                  If an admin class isn't given, it will use ModelAdmin (the default
+                  admin options). If keyword arguments are given -- e.g., list_display --
+                  they'll be applied as options to the admin class.
+                  If a model is already registered, this will raise AlreadyRegistered.
+                  If a model is abstract, this will raise ImproperlyConfigured.'''
+          '''用提供的admin 类给model（我们的表格）注册，必须给Model类，而不是实例
+            如果没有指定admin类，会用默认的ModelAdmin，如果给了关键词参数，如list_display，他们会被作为选项应用在admin类中
+            如果一个model 已经被注册了，会报AlreadyRegistered异常
+            如果一个model是抽象的，这会引起ImproperlyConfigured异常。'''
+     小结：
+     所以我们做的事是将   代表我们表格的类   传给 site.py中  AdminSite类 实例化的site对象  的register 方法    进行注册，默认是 
+     用   ModelAdmin 管理 。
+     site 对象就是生成的admin 站点。
+
+     3. 进入 sites.py
+     顾名思义是生成站点的文件，一共两个对象，三个类
+     第一个对象是”弱集合“，
+     第二个对象是我们需要的站点
+     第一个类是已经注册的异常，继承了Exception，第二个类是没有注册的异常，同样继承了Exception，无内容，两个用来抛异常的类。
+     第三个是重点关注，生成站点的类AdminSite。
+     class AdminSite(object):
+         """
+         An AdminSite object encapsulates an instance of the Django admin application, ready
+         to be hooked in to your URLconf. Models are registered with the AdminSite using the
+         register() method, and the get_urls() method can then be used to access Django view
+         functions that present a full admin interface for the collection of registered
+         models.
+
+         一个AdminSite对象封装了Django管理应用程序的一个实例，准备被挂钩到你的URLconf。
+         使用register（）方法向AdminSite注册模型，
+         然后可以使用get_urls（）方法访问为注册模型集合提供完整管理界面的Django视图函数。
+         """
+
+         # Text to put at the end of each page's <title>.
+         # 放在每页<title>的文本
+         site_title = ugettext_lazy('Django site admin')
+
+         # Text to put in each page's <h1>.
+         # 放在每页<h1>的文本
+         site_header = ugettext_lazy('Django administration')
+
+         # Text to put at the top of the admin index page.
+         # 放在admin 主页顶部的文本
+         index_title = ugettext_lazy('Site administration')
+
+         # URL for the "View site" link at the top of each admin page.
+         # 根url
+         site_url = '/'
+
+         _empty_value_display = '-'
+
+         login_form = None
+         index_template = None
+         app_index_template = None
+         login_template = None
+         logout_template = None
+         password_change_template = None
+         password_change_done_template = None
+
+     下面来看 AdminSite 的 25 个方法和相关内容
+
+      def __init__(self, name='admin'):
+             self._registry = {}                                                 # model_class class -> admin_class instance 将model_class类转为admin_class实例，也就是我们的表放的地方
+             self.name = name                                                    # 站点名
+             self._actions = {'delete_selected': actions.delete_selected}        # 默认行为，删除选中，在actions.py 中只有这一个方法
+             self._global_actions = self._actions.copy()                         # 全局行为，复制默认行为
+             all_sites.add(self)                                                 # 将实例加入all_sites 这个’弱集合’
+
+     解释： 初始化一些变量，一些方法如 delete_selected，暂时不讨论内部如何实现。
+
+         def check(self, app_configs):
+             """
+             Run the system checks on all ModelAdmins, except if they aren't customized at all.
+
+             如果没有自定义，就对所有ModelAdmins进行系统检查
+             """
+             if app_configs is None:
+                 app_configs = apps.get_app_configs()                                           # 没有传配置，就去apps对象中拿配置信息 
+             app_configs = set(app_configs)                                                     # Speed up lookups below 加速下面查找(去重)
+
+             errors = []
+             modeladmins = (o for o in self._registry.values() if o.__class__ is not ModelAdmin)#生成器加递归检查，将不是ModelAdmin的对象放入erros列表
+             for modeladmin in modeladmins:
+                 if modeladmin.model._meta.app_config in app_configs:
+                     errors.extend(modeladmin.check())
+             return errors
+
+     解释：apps 是django.apps.register.py 中 Apps 类实例的一个对象，存储已安装应用程序配置的注册表。它也跟踪模型，例如。 提供反向关系。后续有时间研究。
+
+     这个方法主要拿到配置信息和错误对象。
+
+         def register(self, model_or_iterable, admin_class=None, **options):
+             """
+             Registers the given model(s) with the given admin class.
+             用提供的admin 类 注册给的表 model
+             The model(s) should be Model classes, not instances.
+             必须给Model类，而不是实例
+             If an admin class isn't given, it will use ModelAdmin (the default
+             admin options). If keyword arguments are given -- e.g., list_display --
+             they'll be applied as options to the admin class.
+             如果没有指定admin类，会用默认的ModelAdmin，如果给了关键词参数，如list_display，
+             他们会被作为选项应用在admin类中
+             If a model is already registered, this will raise AlreadyRegistered.
+             如果一个model 已经被注册了，会报AlreadyRegistered异常
+             If a model is abstract, this will raise ImproperlyConfigured.
+             如果一个model是抽象的，这会引起ImproperlyConfigured异常。
+             """
+             if not admin_class:
+                 admin_class = ModelAdmin                                              # 如果没指定，就用ModelAdmin 
+
+             if isinstance(model_or_iterable, ModelBase):                              # 如果输入的是一个代表表格的类，就把它变成列表，所以能传类或者列表，ModelBase是Model的元类
+                 model_or_iterable = [model_or_iterable]
+             for model in model_or_iterable:                                           # 判断列表中每个类是不是抽象类，如果是，抛出异常，背后比较复杂，在ModelBase中实现，有空研究
+                 if model._meta.abstract:                                           
+                     raise ImproperlyConfigured(
+                         'The model %s is abstract, so it cannot be registered with admin.' % model.__name__
+                     )
+
+                 if model in self._registry:
+                     raise AlreadyRegistered('The model %s is already registered' % model.__name__) #如果已经注册，抛出异常
+
+                 # Ignore the registration if the model has been 
+                 # swapped out.
+                 if not model._meta.swapped:                                                     #如果没有被 swapped,继续，同样在ModelBase 中属性，不太明白
+                     # If we got **options then dynamically construct a subclass of              #生成自定义配置
+                     # admin_class with those **options.
+                     if options:
+                         # For reasons I don't quite understand, without a __module__            # 作者也不知道为什么，就是要加__model__属性
+                         # the created class appears to "live" in the wrong place,
+                         # which causes issues later on.
+                         options['__module__'] = __name__
+                         admin_class = type("%sAdmin" % model.__name__, (admin_class,), options) # 用type函数将自定义属性添加到默认的ModelAdmin 中，生成新的类
+
+                     # Instantiate the admin class to save in the registry                       # 将表格的类作为键，将ModelAdmin或自定义后的ModelAdmin 用 该类和site实例 生成的
+                     self._registry[model] = admin_class(model, self)                            # 作为键值
+
+     解释：1. 该函数目的是将我们的表格和管理的类结合一一对应下来，
+
+     2. ype函数有两种用法：
+
+         type(object) -> the object's type
+         type(name, bases, dict) -> a new type
+
+     3. **options  是可扩展的功能，在admin 的options.py 中有详细列出，之后在高级定制中讨论。
+
+         def unregister(self, model_or_iterable):
+             """
+             Unregisters the given model(s).
+
+             If a model isn't already registered, this will raise NotRegistered.
+             """
+             if isinstance(model_or_iterable, ModelBase):
+                 model_or_iterable = [model_or_iterable]
+             for model in model_or_iterable:
+                 if model not in self._registry:
+                     raise NotRegistered('The model %s is not registered' % model.__name__)
+                 del self._registry[model]
+
+        def is_registered(self, model):
+             """
+             Check if a model class is registered with this `AdminSite`.
+             """
+             return model in self._registry
+
+     解释： 取消注册和判断是否注册，本质就是判断对象是否在我们生成的字典中
+
+         def add_action(self, action, name=None):
+             """
+             Register an action to be available globally.
+          注册新的操作
+             """
+             name = name or action.__name__
+             self._actions[name] = action
+             self._global_actions[name] = action
+
+         def disable_action(self, name):
+             """
+             Disable a globally-registered action. Raises KeyError for invalid names.
+             删除已有操作
+             """
+             del self._actions[name]
+
+         def get_action(self, name):
+             """
+             Explicitly get a registered global action whether it's enabled or
+             not. Raises KeyError for invalid names.
+          返回全局操作，无论是否运行 ，
+             """
+             return self._global_actions[name]
+
+         @property
+         def actions(self):
+             """
+             Get all the enabled actions as an iterable of (name, func).
+          获得所有运行的操作组成的可迭代的元组，如(name,func),property装饰器将方法变为属性调用
+             """
+             return six.iteritems(self._actions)
+
+     解释：1. 操作增删改查的行为，默认是删除选中这一种，
+
+     2. six.iteritems  目的， 兼容py2实现    将目标字典转为 迭代器
+
+         @property
+         def empty_value_display(self):
+             return self._empty_value_display
+
+         @empty_value_display.setter
+         def empty_value_display(self, empty_value_display):
+             self._empty_value_display = empty_value_display
+
+     解释：默认空值显示 ’-‘，  可以自定义空值符号，调用property的setter方法实现
+
+      def has_permission(self, request):
+             """
+             Returns True if the given HttpRequest has permission to view  #检查登录权限
+             *at least one* page in the admin site.
+             """
+             return request.user.is_active and request.user.is_staff
+
+
+      def admin_view(self, view, cacheable=False):
+         """
+         Decorator to create an admin view attached to this ``AdminSite``. This
+         wraps the view and provides permission checking by calling
+         ``self.has_permission``.
+
+         You'll want to use this from within ``AdminSite.get_urls()``:
+
+             class MyAdminSite(AdminSite):
+
+                 def get_urls(self):
+                     from django.conf.urls import url
+
+                     urls = super(MyAdminSite, self).get_urls()
+                     urls += [
+                         url(r'^my_view/$', self.admin_view(some_view))
+                     ]
+                     return urls
+
+         By default, admin_views are marked non-cacheable using the
+         ``never_cache`` decorator. If the view can be safely cached, set
+         cacheable=True.
+
+       用来创造添在这个"AdminSite"的视图函数的装饰器，其中调用 self.has_permission 检查权限，
+       我们也可以用此函数来自定义我们需要在admin后台出现的视图
+       默认是不缓存，如果确认是安全缓存的，就设置  cacheable = False
+         """
+         def inner(request, *args, **kwargs):
+             if not self.has_permission(request):                                              #如果没有权限，
+                 if request.path == reverse('admin:logout', current_app=self.name):　　　　　　  #如果为登出，就转到首页
+                     index_path = reverse('admin:index', current_app=self.name)
+                     return HttpResponseRedirect(index_path)
+                 # Inner import to prevent django.contrib.admin (app) from                     # 在此处导入而不是开头是因为要防止从无关的用户认证组件导入
+                 # importing django.contrib.auth.models.User (unrelated model).
+                 from django.contrib.auth.views import redirect_to_login
+                 return redirect_to_login(
+                     request.get_full_path(),
+                     reverse('admin:login', current_app=self.name)                              #记录想去的页面之后，跳转登录页面，登录成功进入想去页面
+                 )
+             return view(request, *args, **kwargs)
+         if not cacheable:
+             inner = never_cache(inner)                                                         # 通过 never_cache 闭包函数在request上加header 设置不缓存
+         # We add csrf_protect here so this function can be used as a utility
+         # function for any view, without having to repeat 'csrf_protect'.
+         if not getattr(view, 'csrf_exempt', False):                                            # 如果没有明确说 取消"csrf"机制，那就通过 csrf_poctect 闭包添加
+             inner = csrf_protect(inner)
+         return update_wrapper(inner, view)
+
+     解释：用来创立admin自己的视图函数。
+
+      def get_urls(self):
+             from django.conf.urls import url, include
+             # Since this module gets imported in the application's root package,
+             # it cannot import models from other applications at the module level,
+             # and django.contrib.contenttypes.views imports ContentType.
+         """
+         这个模块在app 根包里导入了，它无法在其他app 里从模块水平导入，
+
+            """
+
+             from django.contrib.contenttypes import views as contenttype_views
+
+             def wrap(view, cacheable=False):
+                 def wrapper(*args, **kwargs):
+                     return self.admin_view(view, cacheable)(*args, **kwargs)
+                 wrapper.admin_site = self
+                 return update_wrapper(wrapper, view)
+
+             # Admin-site-wide views.
+             urlpatterns = [
+                 url(r'^$', wrap(self.index), name='index'),
+                 url(r'^login/$', self.login, name='login'),
+                 url(r'^logout/$', wrap(self.logout), name='logout'),
+                 url(r'^password_change/$', wrap(self.password_change, cacheable=True), name='password_change'),
+                 url(r'^password_change/done/$', wrap(self.password_change_done, cacheable=True),
+                     name='password_change_done'),
+                 url(r'^jsi18n/$', wrap(self.i18n_javascript, cacheable=True), name='jsi18n'),
+                 url(r'^r/(?P<content_type_id>\d+)/(?P<object_id>.+)/$', wrap(contenttype_views.shortcut),
+                     name='view_on_site'),
+             ]
+
+             # Add in each model's views, and create a list of valid URLS for the app_index
+          # 生成每一个表的视图函数和url列表，appname/modelname/   开头，
+
+             valid_app_labels = []
+             for model, model_admin in self._registry.items():
+                 urlpatterns += [
+                     url(r'^%s/%s/' % (model._meta.app_label, model._meta.model_name), include(model_admin.urls)),
+                 ]
+                 if model._meta.app_label not in valid_app_labels:
+                     valid_app_labels.append(model._meta.app_label)
+
+             # If there were ModelAdmins registered, we should have a list of app
+             # labels for which we need to allow access to the app_index view,
+          # 如果有注册的表，生成到显示某个app内所有表格信息的页面。
+
+             if valid_app_labels:
+                 regex = r'^(?P<app_label>' + '|'.join(valid_app_labels) + ')/$'
+                 urlpatterns += [
+                     url(regex, wrap(self.app_index), name='app_list'),
+                 ]
+             return urlpatterns
+
+
+       @property
+       def urls(self):
+           return self.get_urls(), 'admin', self.name
+
+     解释：很明显，这个函数是生成url的核心函数，url列表包括：固定的(login logout 等)，根据注册表拼接的（app名/表名/），还有某一app（app名/）
+
+         def each_context(self, request):
+             """
+             Returns a dictionary of variables to put in the template context for
+             *every* page in the admin site.
+
+             For sites running on a subpath, use the SCRIPT_NAME value if site_url
+             hasn't been customized.
+
+             返回一个每页都有的变量组成的字典，在子路径的页面，如果没有定制，就用SCRIPT_NAME 的值
+
+             """
+             script_name = request.META['SCRIPT_NAME']
+             site_url = script_name if self.site_url == '/' and script_name else self.site_url
+             return {
+                 'site_title': self.site_title,
+                 'site_header': self.site_header,
+                 'site_url': site_url,
+                 'has_permission': self.has_permission(request),
+                 'available_apps': self.get_app_list(request),
+             }
+
+     解释： 用来传递通用变量
+
+      def password_change(self, request, extra_context=None):
+             """
+             Handles the "change password" task -- both form display and validation.
+          解决改密码任务， 表单展示和验证
+             """
+             from django.contrib.admin.forms import AdminPasswordChangeForm                          
+             from django.contrib.auth.views import PasswordChangeView
+             url = reverse('admin:password_change_done', current_app=self.name)
+             defaults = {
+                 'form_class': AdminPasswordChangeForm,
+                 'success_url': url,
+                 'extra_context': dict(self.each_context(request), **(extra_context or {})),
+             }
+             if self.password_change_template is not None:
+                 defaults['template_name'] = self.password_change_template
+             request.current_app = self.name
+             return PasswordChangeView.as_view(**defaults)(request)                    #as_view  完整性检查
+
+         def password_change_done(self, request, extra_context=None):
+             """
+             Displays the "success" page after a password change.
+          展示修改密码成功界面
+             """
+             from django.contrib.auth.views import PasswordChangeDoneView
+             defaults = {
+                 'extra_context': dict(self.each_context(request), **(extra_context or {})),
+             }
+             if self.password_change_done_template is not None:
+                 defaults['template_name'] = self.password_change_done_template
+             request.current_app = self.name
+             return PasswordChangeDoneView.as_view(**defaults)(request)
+
+         def i18n_javascript(self, request, extra_context=None):
+             """
+             Displays the i18n JavaScript that the Django admin requires.
+
+             `extra_context` is unused but present for consistency with the other
+             admin views.
+          展示 Django admin 需要的多语言js
+
+             """
+             return JavaScriptCatalog.as_view(packages=['django.contrib.admin'])(request)
+
+     解释：  逻辑一样，先设置默认字典，有成功后url，当前表单，额外上下文变量（在默认中添加），模板名（默认或自定义），
+
+     传入cbv的PasswordChangeView,实现修改密码，等视图函数
+
+      @never_cache
+         def logout(self, request, extra_context=None):
+             """
+             Logs out the user for the given HttpRequest.
+
+             This should *not* assume the user is already logged in.
+             """
+             from django.contrib.auth.views import LogoutView
+             defaults = {
+                 'extra_context': dict(
+                     self.each_context(request),
+                     # Since the user isn't logged out at this point, the value of
+                     # has_permission must be overridden.
+                     has_permission=False,
+                     **(extra_context or {})
+                 ),
+             }
+             if self.logout_template is not None:
+                 defaults['template_name'] = self.logout_template
+             request.current_app = self.name
+             return LogoutView.as_view(**defaults)(request)
+
+         @never_cache
+         def login(self, request, extra_context=None):
+             """
+             Displays the login form for the given HttpRequest.
+             """
+             if request.method == 'GET' and self.has_permission(request):
+                 # Already logged-in, redirect to admin index
+                 index_path = reverse('admin:index', current_app=self.name)
+                 return HttpResponseRedirect(index_path)
+
+             from django.contrib.auth.views import LoginView
+             # Since this module gets imported in the application's root package,
+             # it cannot import models from other applications at the module level,
+             # and django.contrib.admin.forms eventually imports User.
+             from django.contrib.admin.forms import AdminAuthenticationForm
+             context = dict(
+                 self.each_context(request),
+                 title=_('Log in'),
+                 app_path=request.get_full_path(),
+                 username=request.user.get_username(),
+             )
+             if (REDIRECT_FIELD_NAME not in request.GET and
+                     REDIRECT_FIELD_NAME not in request.POST):
+                 context[REDIRECT_FIELD_NAME] = reverse('admin:index', current_app=self.name)
+             context.update(extra_context or {})
+
+             defaults = {
+                 'extra_context': context,
+                 'authentication_form': self.login_form or AdminAuthenticationForm,
+                 'template_name': self.login_template or 'admin/login.html',
+             }
+             request.current_app = self.name
+             return LoginView.as_view(**defaults)(request)
+
+     解释：login logout 同上
+
+        def _build_app_dict(self, request, label=None):
+             """
+             Builds the app dictionary. Takes an optional label parameters to filter
+             models of a specific app.
+             """
+             app_dict = {}
+
+             if label:
+                 models = {
+                     m: m_a for m, m_a in self._registry.items()
+                     if m._meta.app_label == label
+                 }
+             else:
+                 models = self._registry
+
+             for model, model_admin in models.items():
+                 app_label = model._meta.app_label
+
+                 has_module_perms = model_admin.has_module_permission(request)
+                 if not has_module_perms:
+                     continue
+
+                 perms = model_admin.get_model_perms(request)
+
+                 # Check whether user has any perm for this module.
+                 # If so, add the module to the model_list.
+                 if True not in perms.values():
+                     continue
+
+                 info = (app_label, model._meta.model_name)
+                 model_dict = {
+                     'name': capfirst(model._meta.verbose_name_plural),
+                     'object_name': model._meta.object_name,
+                     'perms': perms,
+                 }
+                 if perms.get('change'):
+                     try:
+                         model_dict['admin_url'] = reverse('admin:%s_%s_changelist' % info, current_app=self.name)
+                     except NoReverseMatch:
+                         pass
+                 if perms.get('add'):
+                     try:
+                         model_dict['add_url'] = reverse('admin:%s_%s_add' % info, current_app=self.name)
+                     except NoReverseMatch:
+                         pass
+
+                 if app_label in app_dict:
+                     app_dict[app_label]['models'].append(model_dict)
+                 else:
+                     app_dict[app_label] = {
+                         'name': apps.get_app_config(app_label).verbose_name,
+                         'app_label': app_label,
+                         'app_url': reverse(
+                             'admin:app_list',
+                             kwargs={'app_label': app_label},
+                             current_app=self.name,
+                         ),
+                         'has_module_perms': has_module_perms,
+                         'models': [model_dict],
+                     }
+
+             if label:
+                 return app_dict.get(label)
+             return app_dict
+
+         def get_app_list(self, request):
+             """
+             Returns a sorted list of all the installed apps that have been
+             registered in this site.
+             """
+             app_dict = self._build_app_dict(request)
+
+             # Sort the apps alphabetically.
+             app_list = sorted(app_dict.values(), key=lambda x: x['name'].lower())
+
+             # Sort the models alphabetically within each app.
+             for app in app_list:
+                 app['models'].sort(key=lambda x: x['name'])
+
+             return app_list
+
+     解释： 建立app的字典 在排序
+
+         @never_cache
+         def index(self, request, extra_context=None):
+             """
+             Displays the main admin index page, which lists all of the installed
+             apps that have been registered in this site.
+             """
+             app_list = self.get_app_list(request)
+
+             context = dict(
+                 self.each_context(request),
+                 title=self.index_title,
+                 app_list=app_list,
+             )
+             context.update(extra_context or {})
+
+             request.current_app = self.name
+
+             return TemplateResponse(request, self.index_template or 'admin/index.html', context)
+
+         def app_index(self, request, app_label, extra_context=None):
+             app_dict = self._build_app_dict(request, app_label)
+             if not app_dict:
+                 raise Http404('The requested admin page does not exist.')
+             # Sort the models alphabetically within each app.
+             app_dict['models'].sort(key=lambda x: x['name'])
+             app_name = apps.get_app_config(app_label).verbose_name
+             context = dict(
+                 self.each_context(request),
+                 title=_('%(app)s administration') % {'app': app_name},
+                 app_list=[app_dict],
+                 app_label=app_label,
+             )
+             context.update(extra_context or {})
+
+             request.current_app = self.name
+
+             return TemplateResponse(request, self.app_index_template or [
+                 'admin/%s/app_index.html' % app_label,
+                 'admin/app_index.html'
+             ], context)
+
+     解释： index 好理解，就是将之前的处理数据渲染主页模板，app_index 就是 显示所有app 的页面
+
+     小结：25 种方法 实现了admin站点的基本功能和接口，有注册方面，操作方面，默认空值符，生成url，修改密码，登录登出，主页。
+
+     里面包含了许多编程思想和方法，值得继续深入研究。
+
+     五、总结
+
+     在这篇文章中，通过基本使用，分析了admin组件第一步相关的sites源码，理解了site 这个对象的构造方式和包含方法。
+21.更改Django用户密码
+      一段时间没进Django管理页面，密码居然忘记了。
+     可以用以下两种方式解决：
+         python manage.py changepassword your_username
+     可是这种方法有个“缺陷”：如果输入的新密码不合规，会提示：
+     This password is too short. It must contain at least 8 characters.
+     This password is too common.
+     This password is entirely numeric.
+     如果图省事，可以用下一种方式。
+         在Django Shell中操作
+     按步骤如：
+     In [1]: from django.contrib.auth.models import User
+     In [2]: u = User.objects.get(username='admin')
+     In [3]: u.set_password('1234')
+     In [4]: u.save()
+22.Django用户认证系统
+      一. 认证系统概要
+         create_user 创建用户
+         authenticate 验证登录
+         login 记住用户的登录状态
+         logout 退出登录
+         is_authenticated 判断用户是否登录
+         login_required 判断用户是否登录的装饰器
+     二. 创建用户和验证登录
+         当用户注册的时候用 create_user(username,password,email) 默认情况下 is_active=True,is_staff=False,is_superuser=False 。
+             底层将password用hash算法加密之后存储到数据库中。
+         当用户登录的时候用 authenticate(username=username,password=password) 验证登录，判断数据库中是否存在用户输入的账号和密码，
+         返回一个user对象。
+             底层将password用hash算法加密后和数据库中password进行对比。
+
+     三. 记住用户的登录状态
+     当用户登录的时候用 login(request,user) 来记住用户的登录状态，默认将用户的id存储在session中。
+         login有两个参数一个是request，一个是user，user的来源必须是 authenticate 返回的。 也就是说用 login 之前必须先调用 authenticate 。
+     四. 退出登录
+     当用户注销的时候用 logout(request) ,只需要一个参数request。
+     五. 判断用户是否登录
+         在后台的视图函数里可以用 request.user.is_authenticated() 判断用户是否登录
+         在前端页面中可以用 {% if user.is_authenticated %}{% endif %} 判断用户是否登录
+     六. 装饰器判断用户是否登录
+         基于普通的视图函数可以使用 @login_required 来装饰，但是基于类视图的get和post方法不能直接使用 @login_required 来装饰。
+         基于类视图的装饰有以下三种：
+             第一种：在urls文件中导入 login_requtred ,直接装饰 as_view() 函数
+             url(r'^$', login_required(UserInfoView.as_view()), name='user')
+             第二种：自定义一个 LoginRequiredView 类继承 View 类，重写 as_view() 函数，并装饰 as_view() 函数的返回值。 我们自定义
+             的视图类就不需要再继承 View 类，直接继承 LoginRequiredView 类就好了。
+             class LoginRequiredView(View):
+                 @classmethod
+                 def as_view(cls, **initkwargs):
+                     # 调用View类中as_view方法
+                     view = super(LoginRequiredView, cls).as_view(**initkwargs)
+                     # 调用login_required装饰器
+                     return login_required(view)
+
+             第三种：自定义一个 LoginRequiredMixin 类，重写 as_view() 函数，调用 View 中的 as_view() 函数，并装饰 as_view() 函数的
+             返回值。 我们自定义的视图类需要先继承 LoginRequiredMixin 类再继承 View 类。这种方式的关键点在于： 多继承中 super() 的调用
+             顺序和 __mro__ 的顺序是一样的 。
+
+             class LoginRequiredMixin(object):
+                 @classmethod
+                 def as_view(cls, **initkwargs):
+                     # 调用View类中as_view方法
+                     view = super(LoginRequiredMixin, cls).as_view(**initkwargs)
+
+                     # 调用login_required装饰器
+                     return login_required(view)
+
+

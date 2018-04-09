@@ -1,0 +1,1214 @@
+1.使用 FormRequest.from_response() 方法实现模拟用户
+import scrapy
+
+class LoginSpider(scrapy.Spider):
+    name = 'example.com'
+    start_urls = ['http://www.example.com/users/login.php']
+
+    def parse(self, response):
+        return scrapy.FormRequest.from_response(
+            response,
+            formdata={'username': 'john', 'password': 'secret'},
+            callback=self.after_login
+        )
+
+    def after_login(self, response):
+        # check login succeed before going on
+        if "authentication failed" in response.body:
+            self.log("Login failed", level=log.ERROR)
+            return
+            
+  2.yield
+  迭代器
+
+迭代是Python最强大的功能之一，是访问集合元素的一种方式。
+
+迭代器是一个可以记住遍历的位置的对象。
+
+迭代器对象从集合的第一个元素开始访问，直到所有的元素被访问完结束。迭代器只能往前不会后退。
+
+迭代器有两个基本的方法：iter() 和 next()。
+
+字符串，列表或元组对象都可用于创建迭代器：
+实例(Python 3.0+)
+>>>list=[1,2,3,4]
+>>> it = iter(list)    # 创建迭代器对象
+>>> print (next(it))   # 输出迭代器的下一个元素
+1
+>>> print (next(it))
+2
+>>>
+
+迭代器对象可以使用常规for语句进行遍历：
+实例(Python 3.0+)
+#!/usr/bin/python3
+ 
+list=[1,2,3,4]
+it = iter(list)    # 创建迭代器对象
+for x in it:
+    print (x, end=" ")
+
+执行以上程序，输出结果如下：
+
+1 2 3 4
+
+也可以使用 next() 函数：
+实例(Python 3.0+)
+#!/usr/bin/python3
+ 
+import sys         # 引入 sys 模块
+ 
+list=[1,2,3,4]
+it = iter(list)    # 创建迭代器对象
+ 
+while True:
+    try:
+        print (next(it))
+    except StopIteration:
+        sys.exit()
+
+执行以上程序，输出结果如下：
+
+1
+2
+3
+4
+
+生成器
+
+在 Python 中，使用了 yield 的函数被称为生成器（generator）。
+
+跟普通函数不同的是，生成器是一个返回迭代器的函数，只能用于迭代操作，更简单点理解生成器就是一个迭代器。
+
+在调用生成器运行的过程中，每次遇到 yield 时函数会暂停并保存当前所有的运行信息，返回 yield 的值, 并在下一次执行 next() 方法时从当前位置继续运行。
+
+调用一个生成器函数，返回的是一个迭代器对象。
+
+以下实例使用 yield 实现斐波那契数列：
+实例(Python 3.0+)
+#!/usr/bin/python3
+ 
+import sys
+ 
+def fibonacci(n): # 生成器函数 - 斐波那契
+    a, b, counter = 0, 1, 0
+    while True:
+        if (counter > n): 
+            return
+        yield a
+        a, b = b, a + b
+        counter += 1
+f = fibonacci(10) # f 是一个迭代器，由生成器返回生成
+ 
+while True:
+    try:
+        print (next(f), end=" ")
+    except StopIteration:
+        sys.exit()
+
+执行以上程序，输出结果如下：
+
+0 1 1 2 3 5 8 13 21 34 55
+
+3. Scrapy-Request和Response（请求和响应） 
+ Scrapy的Request和Response对象用于爬网网站。
+
+通常，Request对象在爬虫程序中生成并传递到系统，直到它们到达下载程序，后者执行请求并返回一个Response对象，该对象返回到发出请求的爬虫程序。
+
+    上面一段话比较拗口，有web经验的同学，应该都了解的，不明白看下面的图大概理解下。
+
+爬虫->Request:创建
+Request->Response:获取下载数据
+Response->爬虫:数据
+
+
+两个类Request和Response类都有一些子类，它们添加基类中不需要的功能。这些在下面的请求子类和 响应子类中描述。
+Request objects
+
+class scrapy.http.Request(url[, callback, method='GET', headers, body, cookies, meta, encoding='utf-8', priority=0, dont_filter=False, errback])
+
+一个Request对象表示一个HTTP请求，它通常是在爬虫生成，并由下载执行，从而生成Response。
+
+    参数：
+        url（string） - 此请求的网址
+        callback（callable） - 将使用此请求的响应（一旦下载）作为其第一个参数调用的函数。有关更多信息，请参阅下面的将附加数据传递给回调函数。如果请求没有指定回调，parse()将使用spider的 方法。请注意，如果在处理期间引发异常，则会调用errback。
+        method（string） - 此请求的HTTP方法。默认为'GET'。
+        meta（dict） - 属性的初始值Request.meta。如果给定，在此参数中传递的dict将被浅复制。
+        body（str或unicode） - 请求体。如果unicode传递了a，那么它被编码为 str使用传递的编码（默认为utf-8）。如果 body没有给出，则存储一个空字符串。不管这个参数的类型，存储的最终值将是一个str（不会是unicode或None）。
+        headers（dict） - 这个请求的头。dict值可以是字符串（对于单值标头）或列表（对于多值标头）。如果 None作为值传递，则不会发送HTTP头。
+
+        cookie（dict或list） - 请求cookie。这些可以以两种形式发送。
+            使用dict：
+
+        request_with_cookies = Request(url="http://www.example.com",
+                                       cookies={'currency': 'USD', 'country': 'UY'})
+
+    * 使用列表：
+
+    ```
+    request_with_cookies = Request(url="http://www.example.com",
+                                   cookies=[{'name': 'currency',
+                                            'value': 'USD',
+                                            'domain': 'example.com',
+                                            'path': '/currency'}])
+    ```
+
+后一种形式允许定制 cookie的属性domain和path属性。这只有在保存Cookie用于以后的请求时才有用。
+
+当某些网站返回Cookie（在响应中）时，这些Cookie会存储在该域的Cookie中，并在将来的请求中再次发送。这是任何常规网络浏览器的典型行为。但是，如果由于某种原因，您想要避免与现有Cookie合并，您可以通过将dont_merge_cookies关键字设置为True 来指示Scrapy如此操作 Request.meta。
+
+不合并Cookie的请求示例：
+
+request_with_cookies = Request(url="http://www.example.com",
+                               cookies={'currency': 'USD', 'country': 'UY'},
+                               meta={'dont_merge_cookies': True})
+
+有关详细信息，请参阅CookiesMiddleware。
+
+    encoding（string） - 此请求的编码（默认为'utf-8'）。此编码将用于对URL进行百分比编码，并将正文转换为str（如果给定unicode）。
+    priority（int） - 此请求的优先级（默认为0）。调度器使用优先级来定义用于处理请求的顺序。具有较高优先级值的请求将较早执行。允许负值以指示相对低优先级。
+    dont_filter（boolean） - 表示此请求不应由调度程序过滤。当您想要多次执行相同的请求时忽略重复过滤器时使用。小心使用它，或者你会进入爬行循环。默认为False。
+
+    errback（callable） - 如果在处理请求时引发任何异常，将调用的函数。这包括失败的404 HTTP错误等页面。它接收一个Twisted Failure实例作为第一个参数。有关更多信息，请参阅使用errbacks在请求处理中捕获异常。
+
+    url
+    包含此请求的网址的字符串。请记住，此属性包含转义的网址，因此它可能与构造函数中传递的网址不同。
+
+此属性为只读。更改请求使用的URL replace()。
+
+    method
+    表示请求中的HTTP方法的字符串。这保证是大写的。例如："GET"，"POST"，"PUT"等
+
+    headers
+    包含请求标头的类似字典的对象。
+
+    body
+    包含请求正文的str。
+
+此属性为只读。更改请求使用的正文 replace()。
+
+    meta
+    包含此请求的任意元数据的字典。此dict对于新请求为空，通常由不同的Scrapy组件（扩展程序，中间件等）填充。因此，此dict中包含的数据取决于您启用的扩展。
+
+有关Scrapy识别的特殊元键列表，请参阅Request.meta特殊键。
+
+当使用or 方法克隆请求时，此dict是浅复制的 ，并且也可以在您的爬虫中从属性访问。copy()replace()response.meta
+
+    copy（）
+    返回一个新的请求，它是这个请求的副本。另请参见： 将附加数据传递到回调函数。
+
+    replace([url, method, headers, body, cookies, meta, encoding,
+     dont_filter, callback, errback])
+    返回具有相同成员的Request对象，但通过指定的任何关键字参数赋予新值的成员除外。该属性Request.meta是默认复制（除非新的值在给定的meta参数）。另请参见 将附加数据传递给回调函数。
+
+将附加数据传递给回调函数
+
+请求的回调是当下载该请求的响应时将被调用的函数。将使用下载的Response对象作为其第一个参数来调用回调函数。
+
+例：
+
+def parse_page1(self, response):
+    return scrapy.Request("http://www.example.com/some_page.html",
+                          callback=self.parse_page2)
+
+def parse_page2(self, response):
+    # this would log http://www.example.com/some_page.html
+    self.logger.info("Visited %s", response.url)
+
+在某些情况下，您可能有兴趣向这些回调函数传递参数，以便稍后在第二个回调中接收参数。您可以使用该Request.meta属性。
+
+以下是使用此机制传递项目以填充来自不同页面的不同字段的示例：
+
+def parse_page1(self, response):
+    item = MyItem()
+    item['main_url'] = response.url
+    request = scrapy.Request("http://www.example.com/some_page.html",
+                             callback=self.parse_page2)
+    request.meta['item'] = item
+    yield request
+
+def parse_page2(self, response):
+    item = response.meta['item']
+    item['other_url'] = response.url
+    yield item
+
+使用errbacks在请求处理中捕获异常
+
+请求的errback是在处理异常时被调用的函数。
+
+它接收一个Twisted Failure实例作为第一个参数，并可用于跟踪连接建立超时，DNS错误等。
+
+这里有一个示例爬虫记录所有错误，并捕获一些特定的错误，如果需要：
+
+import scrapy
+
+from scrapy.spidermiddlewares.httperror import HttpError
+from twisted.internet.error import DNSLookupError
+from twisted.internet.error import TimeoutError, TCPTimedOutError
+
+class ErrbackSpider(scrapy.Spider):
+    name = "errback_example"
+    start_urls = [
+        "http://www.httpbin.org/",              # HTTP 200 expected
+        "http://www.httpbin.org/status/404",    # Not found error
+        "http://www.httpbin.org/status/500",    # server issue
+        "http://www.httpbin.org:12345/",        # non-responding host, timeout expected
+        "http://www.httphttpbinbin.org/",       # DNS error expected
+    ]
+
+    def start_requests(self):
+        for u in self.start_urls:
+            yield scrapy.Request(u, callback=self.parse_httpbin,
+                                    errback=self.errback_httpbin,
+                                    dont_filter=True)
+
+    def parse_httpbin(self, response):
+        self.logger.info('Got successful response from {}'.format(response.url))
+        # do something useful here...
+
+    def errback_httpbin(self, failure):
+        # log all failures
+        self.logger.error(repr(failure))
+
+        # in case you want to do something special for some errors,
+        # you may need the failure's type:
+
+        if failure.check(HttpError):
+            # these exceptions come from HttpError spider middleware
+            # you can get the non-200 response
+            response = failure.value.response
+            self.logger.error('HttpError on %s', response.url)
+
+        elif failure.check(DNSLookupError):
+            # this is the original request
+            request = failure.request
+            self.logger.error('DNSLookupError on %s', request.url)
+
+        elif failure.check(TimeoutError, TCPTimedOutError):
+            request = failure.request
+            self.logger.error('TimeoutError on %s', request.url)
+
+Request.meta特殊键
+
+该Request.meta属性可以包含任何任意数据，但有一些特殊的键由Scrapy及其内置扩展识别。
+
+那些是：
+
+dont_redirect
+dont_retry
+handle_httpstatus_list
+handle_httpstatus_all
+dont_merge_cookies（参见cookies构造函数的Request参数）
+cookiejar
+dont_cache
+redirect_urls
+bindaddress
+dont_obey_robotstxt
+download_timeout
+download_maxsize
+download_latency
+proxy
+
+bindaddress
+
+用于执行请求的出站IP地址的IP。
+download_timeout
+
+下载器在超时前等待的时间量（以秒为单位）。参见：DOWNLOAD_TIMEOUT。
+download_latency
+
+自请求已启动以来，用于获取响应的时间量，即通过网络发送的HTTP消息。此元键仅在响应已下载时可用。虽然大多数其他元键用于控制Scrapy行为，但这应该是只读的。
+请求子类
+
+这里是内置子类的Request列表。您还可以将其子类化以实现您自己的自定义功能。
+
+FormRequest对象
+FormRequest类扩展了Request具有处理HTML表单的功能的基础。它使用lxml.html表单 从Response对象的表单数据预填充表单字段。
+
+class scrapy.http.FormRequest(url[, formdata, ...])
+
+本FormRequest类增加了新的构造函数的参数。其余的参数与Request类相同，这里没有记录。
+
+    参数：formdata（元组的dict或iterable） - 是一个包含HTML Form数据的字典（或（key，value）元组的迭代），它将被url编码并分配给请求的主体。
+    该FormRequest对象支持除标准以下类方法Request的方法：
+
+classmethod from_response(response[, formname=None, formid=None, formnumber=0, formdata=None, formxpath=None, formcss=None, clickdata=None, dont_click=False, ...])
+
+返回一个新FormRequest对象，其中的表单字段值已预先<form>填充在给定响应中包含的HTML 元素中。有关示例，请参阅 使用FormRequest.from_response（）来模拟用户登录。
+
+该策略是在任何可查看的表单控件上默认自动模拟点击，如a 。即使这是相当方便，并且经常想要的行为，有时它可能导致难以调试的问题。例如，当使用使用javascript填充和/或提交的表单时，默认行为可能不是最合适的。要禁用此行为，您可以将参数设置 为。此外，如果要更改单击的控件（而不是禁用它），您还可以使用 参数。<input
+ type="submit"> from_response() dont_click True clickdata
+
+参数：
+
+    response（Responseobject） - 包含将用于预填充表单字段的HTML表单的响应
+    formname（string） - 如果给定，将使用name属性设置为此值的形式。
+    formid（string） - 如果给定，将使用id属性设置为此值的形式。
+    formxpath（string） - 如果给定，将使用匹配xpath的第一个表单。
+    formcss（string） - 如果给定，将使用匹配css选择器的第一个形式。
+    formnumber（integer） - 当响应包含多个表单时要使用的表单的数量。第一个（也是默认）是0。
+    formdata（dict） - 要在表单数据中覆盖的字段。如果响应<form>元素中已存在字段，则其值将被在此参数中传递的值覆盖。
+    clickdata（dict） - 查找控件被点击的属性。如果没有提供，表单数据将被提交，模拟第一个可点击元素的点击。除了html属性，控件可以通过其相对于表单中其他提交表输入的基于零的索引，通过nr属性来标识。
+    dont_click（boolean） - 如果为True，表单数据将在不点击任何元素的情况下提交。
+
+    这个类方法的其他参数直接传递给 FormRequest构造函数。
+    在新版本0.10.3：该formname参数。
+    在新版本0.17：该formxpath参数。
+    新的版本1.1.0：该formcss参数。
+    新的版本1.1.0：该formid参数。
+
+请求使用示例
+使用FormRequest通过HTTP POST发送数据
+
+如果你想在你的爬虫中模拟HTML表单POST并发送几个键值字段，你可以返回一个FormRequest对象（从你的爬虫）像这样：
+
+return [FormRequest(url="http://www.example.com/post/action",
+                    formdata={'name': 'John Doe', 'age': '27'},
+                    callback=self.after_post)]
+
+使用FormRequest.from_response（）来模拟用户登录
+
+网站通常通过元素（例如会话相关数据或认证令牌（用于登录页面））提供预填充的表单字段。进行剪贴时，您需要自动预填充这些字段，并且只覆盖其中的一些，例如用户名和密码。您可以使用 此作业的方法。这里有一个使用它的爬虫示例：<input
+ type="hidden"> FormRequest.from_response()
+
+import scrapy
+
+class LoginSpider(scrapy.Spider):
+    name = 'example.com'
+    start_urls = ['http://www.example.com/users/login.php']
+
+    def parse(self, response):
+        return scrapy.FormRequest.from_response(
+            response,
+            formdata={'username': 'john', 'password': 'secret'},
+            callback=self.after_login
+        )
+
+    def after_login(self, response):
+        # check login succeed before going on
+        if "authentication failed" in response.body:
+            self.logger.error("Login failed")
+            return
+
+        # continue scraping with authenticated session...
+
+响应对象
+
+class scrapy.http.Response(url[, status=200, headers=None,
+ body=b'', flags=None, request=None])
+一个Response对象表示的HTTP响应，这通常是下载（由下载），并供给到爬虫进行处理。
+
+参数：
+
+    url（string） - 此响应的URL
+    status（integer） - 响应的HTTP状态。默认为200。
+    headers（dict） - 这个响应的头。dict值可以是字符串（对于单值标头）或列表（对于多值标头）。
+    body（str） - 响应体。它必须是str，而不是unicode，除非你使用一个编码感知响应子类，如 TextResponse。
+    flags（list） - 是一个包含属性初始值的 Response.flags列表。如果给定，列表将被浅复制。
+    request（Requestobject） - 属性的初始值Response.request。这代表Request生成此响应。
+
+url
+包含响应的URL的字符串。
+
+此属性为只读。更改响应使用的URL replace()。
+
+status
+表示响应的HTTP状态的整数。示例：200， 404。
+
+headers
+包含响应标题的类字典对象。可以使用get()返回具有指定名称的第一个标头值或getlist()返回具有指定名称的所有标头值来访问值。例如，此调用会为您提供标题中的所有Cookie：
+
+response.headers.getlist('Set-Cookie')
+
+body
+本回复的正文。记住Response.body总是一个字节对象。如果你想unicode版本使用 TextResponse.text（只在TextResponse 和子类中可用）。
+
+此属性为只读。更改响应使用的主体 replace()。
+
+request
+Request生成此响应的对象。在响应和请求通过所有下载中间件后，此属性在Scrapy引擎中分配。特别地，这意味着：
+
+HTTP重定向将导致将原始请求（重定向之前的URL）分配给重定向响应（重定向后具有最终URL）。
+Response.request.url并不总是等于Response.url
+此属性仅在爬虫程序代码和 Spider Middleware中可用，但不能在Downloader Middleware中使用（尽管您有通过其他方式可用的请求）和处理程序response_downloaded。
+
+meta
+的快捷方式Request.meta的属性 Response.request对象（即self.request.meta）。
+
+与Response.request属性不同，Response.meta 属性沿重定向和重试传播，因此您将获得Request.meta从您的爬虫发送的原始属性。
+
+也可以看看
+
+Request.meta 属性
+
+flags
+包含此响应的标志的列表。标志是用于标记响应的标签。例如：'cached'，'redirected '等等。它们显示在Response（ str 方法）的字符串表示上，它被引擎用于日志记录。
+
+copy（）
+返回一个新的响应，它是此响应的副本。
+
+replace（[ url，status，headers，body，request，flags，cls ] ）
+返回具有相同成员的Response对象，但通过指定的任何关键字参数赋予新值的成员除外。该属性Response.meta是默认复制。
+
+urljoin（url ）
+通过将响应url与可能的相对URL 组合构造绝对url。
+
+这是一个包装在urlparse.urljoin，它只是一个别名，使这个调用：
+
+urlparse.urljoin(response.url, url)
+
+响应子类
+
+这里是可用的内置Response子类的列表。您还可以将Response类子类化以实现您自己的功能。
+TextResponse对象
+
+class scrapy.http.TextResponse(url[, encoding[, ...]])
+
+TextResponse对象向基Response类添加编码能力 ，这意味着仅用于二进制数据，例如图像，声音或任何媒体文件。
+
+TextResponse对象支持一个新的构造函数参数，除了基础Response对象。其余的功能与Response类相同，这里没有记录。
+
+参数： encoding（string） - 是一个字符串，包含用于此响应的编码。如果你创建一个TextResponse具有unicode主体的对象，它将使用这个编码进行编码（记住body属性总是一个字符串）。如果encoding是None（默认值），则将在响应标头和正文中查找编码。
+TextResponse除了标准对象之外，对象还支持以下属性Response
+
+text
+响应体，如unicode。
+
+同样response.body.decode(response.encoding)，但结果是在第一次调用后缓存，因此您可以访问 response.text多次，无需额外的开销。
+
+    注意
+    unicode(response.body)不是一个正确的方法来将响应身体转换为unicode：您将使用系统默认编码（通常为ascii）而不是响应编码。
+
+encoding
+包含此响应的编码的字符串。编码通过尝试以下机制按顺序解决：
+
+    在构造函数编码参数中传递的编码
+    在Content-Type HTTP头中声明的编码。如果此编码无效（即未知），则会被忽略，并尝试下一个解析机制。
+    在响应主体中声明的编码。TextResponse类不提供任何特殊功能。然而， HtmlResponse和XmlResponse类做。
+    通过查看响应体来推断的编码。这是更脆弱的方法，但也是最后一个尝试。
+
+selector
+一个Selector使用响应为目标实例。选择器在第一次访问时被延迟实例化。
+
+TextResponse对象除了标准对象外还支持以下方法Response：
+
+xpath（查询）
+快捷方式TextResponse.selector.xpath(query)：
+
+response.xpath('//p')
+
+css(query)
+快捷方式 TextResponse.selector.css(query):
+
+response.css('p')
+
+body_as_unicode()
+同样text，但可用作方法。保留此方法以实现向后兼容; 请喜欢response.text。
+HtmlResponse对象
+
+class scrapy.http.HtmlResponse（url [，... ] ）
+本HtmlResponse类的子类，TextResponse 这增加了通过查看HTML编码自动发现支持META HTTP-EQUIV属性。见TextResponse.encoding。
+XmlResponse对象
+
+class scrapy.http.XmlResponse（url [，... ] ）
+本XmlResponse类的子类，TextResponse这增加了通过查看XML声明线路编码自动发现支持。见TextResponse.encoding。
+
+
+4.meta
+作者：乌尔班
+链接：https://www.zhihu.com/question/54773510/answer/146971644
+来源：知乎
+著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。
+
+Request中meta参数的作用是传递信息给下一个函数，使用过程可以理解成：把需要传递的信息赋值给这个叫meta的变量，
+但meta只接受字典类型的赋值，因此
+要把待传递的信息改成“字典”的形式，即：
+meta={'key1':value1,'key2':value2}
+
+如果想在下一个函数中取出value1,
+只需得到上一个函数的meta['key1']即可，
+因为meta是随着Request产生时传递的，
+下一个函数得到的Response对象中就会有meta，
+即response.meta，
+取value1则是value1=response.meta['key1']
+这些信息可以是任意类型的，比如值、字符串、列表、字典......方法是把要传递的信息赋值给字典的键，分析见如下语句（爬虫文件）：class example(scrapy.Spider):
+    name='example'
+    allowed_domains=['example.com']
+    start_urls=['http://www.example.com']
+    def parse(self,response):
+           #从start_urls中分析出的一个网址赋值给url
+           url=response.xpath('.......').extract()
+           #ExamleClass是在items.py中定义的,下面会写出。
+           """记住item本身是一个字典"""
+           item=ExampleClass()
+           item['name']=response.xpath('.......').extract()
+           item['htmlurl']=response.xpath('.......').extract()
+           """通过meta参数，把item这个字典，赋值给meta中的'key'键（记住meta本身也是一个字典）。
+           Scrapy.Request请求url后生成一个"Request对象"，这个meta字典（含有键值'key'，'key'的值也是一个字典，即item）
+           会被“放”在"Request对象"里一起发送给parse2()函数 """
+           yield Request(url,meta={'key':item},callback='parse2')
+     def parse2(self,response):
+           item=response.meta['key']
+           """这个response已含有上述meta字典，此句将这个字典赋值给item，
+           完成信息传递。这个item已经和parse中的item一样了"""
+           item['text']=response.xpath('.......').extract()
+           #item共三个键值，到这里全部添加完毕了
+           yield item
+items.py中语句如下：class ExampleClass(scrapy.Item):
+    name = scrapy.Field()
+    htmlurl = scrapy.Field()
+    text=scrapy.Field()
+meta当然是可以传递cookie的（第一种）：下面start_requests中键‘cookiejar’是一个特殊的键，scrapy在meta中见到此键后，会自动将cookie传递到要callback的函数中。既然是键(key)，就需要有值(value)与之对应，例子中给了数字1，也可以是其他值，比如任意一个字符串。def start_requests(self):
+    yield Request(url,meta={'cookiejar':1},callback=self.parse)
+需要说明的是，meta给‘cookiejar’赋值除了可以表明要把cookie传递下去，还可以对cookie做标记。一个cookie表示一个会话(session)，如果需要经多个会话对某网站进行爬取，可以对cookie做标记，1,2,3,4......这样scrapy就维持了多个会话。def parse(self,response):
+    key=response.meta['cookiejar']    #经过此操作后，key=1
+    yield Request(url2,meta={'cookiejar'：key},callback='parse2')
+def parse2(self,response):
+    pass
+上面这段和下面这段是等效的：def parse(self,response):
+    yield Request(url2,meta={'cookiejar'：response.meta['cookiejar']},callback='parse2')
+    #这样cookiejar的标记符还是数字1
+def parse2(self,response):
+    pass
+传递cookie的第二种写法：如果不加标记，可以用下面的写法：#先引入CookieJar()方法
+from scrapy.http.cookies import CookieJar
+写spider方法时：def start_requests(self):
+    yield Request(url,callback=self.parse)#此处写self.parse或‘parse’都可以
+def parse(self,response):
+    cj = response.meta.setdefault('cookie_jar', CookieJar())
+    cj.extract_cookies(response, response.request)
+    container = cj._cookies
+    yield Request(url2,cookies=container,meta={'key':container},callback='parse2')
+def parse2(self,response):
+    pass
+meta是浅复制，必要时需要深复制。可以这样引入：import copy
+meta={'key':copy.deepcopy('value')}
+
+
+
+5.scrapy常用命令
+查看所有命令
+
+scrapy -h
+
+查看帮助信息
+
+scapy --help
+
+查看版本信息
+
+(venv)ql@ql:~$ scrapy version
+Scrapy 1.1.2
+(venv)ql@ql:~$ 
+(venv)ql@ql:~$ scrapy version -v
+Scrapy    : 1.1.2
+lxml      : 3.6.4.0
+libxml2   : 2.9.4
+Twisted   : 16.4.0
+Python    : 2.7.12 (default, Jul  1 2016, 15:12:24) - [GCC 5.4.0 20160609]
+pyOpenSSL : 16.1.0 (OpenSSL 1.0.2g-fips  1 Mar 2016)
+Platform  : Linux-4.4.0-36-generic-x86_64-with-Ubuntu-16.04-xenial
+(venv)ql@ql:~$ 
+
+新建一个工程
+
+scrapy startproject spider_name
+
+构建爬虫genspider(generator spider)
+
+一个工程中可以存在多个spider, 但是名字必须唯一
+
+scrapy genspider name domain
+#如:
+#scrapy genspider sohu sohu.org
+
+查看当前项目内有多少爬虫
+
+scrapy list
+
+view使用浏览器打开网页
+
+scrapy view http://www.baidu.com
+
+shell命令, 进入scrpay交互环境
+
+#进入该url的交互环境
+scrapy shell http://www.dmoz.org/Computers/Programming/Languages/Python/Books/
+
+之后便进入交互环境
+我们主要使用这里面的response命令, 例如可以使用
+
+response.xpath()    #括号里直接加xpath路径
+
+runspider命令用于直接运行创建的爬虫, 并不会运行整个项目
+
+scrapy runspider 爬虫名称
+
+七
+start_requests()和make_requests_from_url()的区别在哪儿？ 
+
+我的理解是，start_requests()返回一个request,根据自己指定的url;
+make_requests_from_url()也是返回一个request，不过依赖start_urls
+
+八、decode与encode
+import sys
+'''
+*首先要搞清楚，字符串在Python内部的表示是unicode编码，因此，在做编码转换时，通常需要以unicode作为中间编码，
+即先将其他编码的字符串解码（decode）成unicode，再从unicode编码（encode）成另一种编码。
+decode的作用是将其他编码的字符串转换成unicode编码，如str1.decode('gb2312')，表示将gb2312编码的字符串str1转换成unicode编码。
+encode的作用是将unicode编码转换成其他编码的字符串，如str2.encode('gb2312')，表示将unicode编码的字符串str2转换成gb2312编码。
+总得意思:想要将其他的编码转换成utf-8必须先将其解码成unicode然后重新编码成utf-8,它是以unicode为转换媒介的
+如：s='中文'
+如果是在utf8的文件中，该字符串就是utf8编码，如果是在gb2312的文件中，则其编码为gb2312。这种情况下，要进行编码转换，都需要先用
+decode方法将其转换成unicode编码，再使用encode方法将其转换成其他编码。通常，在没有指定特定的编码方式时，都是使用的系统默认编码创建的代码文件。
+如下：
+s.decode('utf-8').encode('utf-8')
+decode():是解码
+encode()是编码
+isinstance(s,unicode):判断s是否是unicode编码，如果是就返回true,否则返回false*
+
+'''
+'''
+s='中文'
+s=s.decode('utf-8')   #将utf-8编码的解码成unicode
+print isinstance(s,unicode)   #此时输出的就是True
+s=s.encode('utf-8')           #又将unicode码编码成utf-8
+print isinstance(s,unicode)   #此时输出的就是False
+'''
+print sys.getdefaultencoding()
+
+s='中文'
+if isinstance(s,unicode):   #如果是unicode就直接编码不需要解码
+    print s.encode('utf-8')
+else:
+    print s.decode('utf-8').encode('gb2312')
+
+print sys.getdefaultencoding()    #获取系统默认的编码
+reload(sys)
+sys.setdefaultencoding('utf8')    #修改系统的默认编码
+print sys.getdefaultencoding()
+
+8.pipline
+# -*- coding: utf-8 -*-
+
+# Define your item pipelines here
+#
+# Don't forget to add your pipeline to the ITEM_PIPELINES setting
+# See: http://doc.scrapy.org/en/latest/topics/item-pipeline.html
+import json
+
+import pymongo
+import pymysql
+from scrapy.exceptions import DropItem
+from twisted.enterprise import adbapi
+import codecs
+
+import settings
+
+
+class MysqlTwistedPipline(object):
+    def __init__(self, dbpool):
+        self.dbpool = dbpool
+
+    @classmethod
+    def from_settings(cls, settings):
+        dbparms = dict(
+            host=settings["MYSQL_HOST"],
+            db=settings["MYSQL_DBNAME"],
+            user=settings["MYSQL_USER"],
+            passwd=settings["MYSQL_PASSWORD"],
+            charset='utf8',
+            cursorclass=pymysql.cursors.DictCursor,
+            use_unicode=True,
+        )
+        dbpool = adbapi.ConnectionPool("pymysql", **dbparms)
+
+        return cls(dbpool)
+
+    def process_item(self, item, spider):
+        # 使用twisted将mysql插入变成异步执行
+        query = self.dbpool.runInteraction(self.do_insert, item)
+        query.addErrback(self.handle_error, item, spider)  # 处理异常
+
+    def handle_error(self, failure, item, spider):
+        # 处理异步插入的异常
+        print(failure)
+
+    def do_insert(self, cursor, item):
+        # 执行具体的插入
+        # 根据不同的item 构建不同的sql语句并插入到mysql中
+        insert_sql, params = item.get_insert_sql()
+        print(insert_sql, params)
+        cursor.execute(insert_sql, params)
+
+
+class JsonWithPipeline(object):
+    def open_spider(self, spider):
+        self.file = open('doubanbook.json', 'w', encoding='utf-8')
+
+    def process_item(self, item, spider):
+        line = json.dumps(dict(item), ensure_ascii=False) + "\n"
+        self.file.write(line)
+        return item
+
+    def spider_closed(self, spider):
+        self.file.close()
+
+
+class MongoPipeline(object):
+    def open_spider(self, spider):
+        self.host = settings["MONGODB_HOST"]
+        self.port = settings["MONGODB_PORT"]
+        self.dbname = settings["MONGODB_DBNAME"]
+        self.sheetname = settings["MONGODB_SHEETNAME"]
+        # 创建MONGODB数据库链接
+        self.client = pymongo.MongoClient(self.host, self.port)
+        # 指定数据库
+        self.db = self.client[self.dbname]
+
+    def process_item(self, item, spider):
+        self.db[spider.name].insert_one(dict(item))
+        return item
+
+
+class DuplicatesPipeline(object):
+    def __init__(self):
+        self.ids_seen = set()
+
+    def process_item(self, item, spider):
+        if item['pid'] in self.ids_seen:
+            raise DropItem("Duplicate item found: %s" % item)
+        else:
+            self.ids_seen.add(item['pid'])
+            return item
+
+9.中间件
+# -*- coding: utf-8 -*-
+
+# Define here the models for your spider middleware
+#
+# See documentation in:
+# http://doc.scrapy.org/en/latest/topics/spider-middleware.html
+import random
+
+import requests
+from bs4 import BeautifulSoup
+from scrapy import signals
+import logging
+from scrapy import signals
+from fake_useragent import UserAgent  # 这是一个随机UserAgent的包，里面有很多UserAgent
+from scrapy.downloadermiddlewares.downloadtimeout import DownloadTimeoutMiddleware
+from scrapy.downloadermiddlewares.redirect import RedirectMiddleware
+
+from proxymanager import proxymng
+
+logger = logging.getLogger(__name__)
+
+
+class RandomUserAgentMiddleware(object):
+    def __init__(self, crawler):
+        super(RandomUserAgentMiddleware, self).__init__()
+        self.ua = UserAgent()
+        self.ua_type = crawler.settings.get('RANDOM_UA_TYPE', 'random')  # 从setting文件中读取RANDOM_UA_TYPE值
+
+    @classmethod
+    def from_crawler(cls, crawler):
+        return cls(crawler)
+
+    def process_request(self, request, spider):
+        def get_ua():
+            return getattr(self.ua, self.ua_type)
+
+        user_agent_random = get_ua()
+        request.headers.setdefault('User-Agent', user_agent_random)  # 这样就是实现了User-Agent的随即变换
+
+
+class RandomProxyMiddleware(object):
+    '''动态设置ip代理'''
+
+    def process_request(self, request, spider):
+        proxy = proxymng.get_proxy(name='httpbin', anonymity=None, count=100)
+        print("this is request ip:" + proxy)
+        request.meta['proxy'] = proxy
+
+    def process_response(self, request, response, spider):
+        if response.status != 200:
+            proxymng.delete_proxy(name='httpbin', proxy=request.meta['proxy'])
+            proxy = proxymng.get_proxy(name='httpbin', anonymity=None, count=100)
+            print("this is response ip:" + proxy)
+            # 对当前reque加上代理
+            request.meta['proxy'] = proxy
+            return request
+        return response
+
+    def process_exception(self, request, exception, spider):
+        print('出现异常')
+        proxymng.delete_proxy(name='httpbin', proxy=request.meta['proxy'])
+        proxy = proxymng.get_proxy(name='httpbin', anonymity=None, count=100)
+        print("this is response ip:" + proxy)
+        # 对当前reque加上代理
+        request.meta['proxy'] = proxy
+        return request
+
+
+class RandomProxy2Middleware(object):
+    '''动态设置ip代理'''
+
+    def process_request(self, request, spider):
+        # proxy2 = "http://%s" % get_proxy()
+        request.meta['proxy'] = "http://%s" % self.get_proxy()
+
+    def process_response(self, request, response, spider):
+        if response.status != 200:
+            proxy = self.get_proxy()
+            print("this is response ip:" + proxy)
+            # 对当前reque加上代理
+            request.meta['proxy'] = "http://%s" % proxy
+            return request
+        return response
+
+    def process_exception(self, request, exception, spider):
+        print('出现异常')
+        proxy = self.get_proxy()
+        print("this is exception ip:" + proxy)
+        # 对当前reque加上代理
+        request.meta['proxy'] = "http://%s" % proxy
+        return request
+
+    def get_proxy(self):
+        r = requests.get('http://127.0.0.1:5555/random')
+        proxy = BeautifulSoup(r.text, "lxml").get_text()
+        return proxy
+
+
+class Redirect_Middleware(RedirectMiddleware):
+    def process_response(self, request, response, spider):
+        http_code = response.status
+        if http_code // 100 == 2:
+            return response
+        elif http_code // 100 == 3 and http_code != 304:
+            print('重定向错误，3xx')
+            return request.replace(dont_filter=True)
+        elif http_code // 100 == 4:
+            print('4xx错误')
+            return request.replace(dont_filter=True)
+        elif http_code // 100 == 5:
+            print('5xx错误')
+            return request.replace(dont_filter=True)
+        else:
+            print('response不是200')
+            return request.replace(dont_filter=True)
+
+
+class Timeout_Middleware(DownloadTimeoutMiddleware):
+    def process_exception(self, request, exception, spider):
+        print(exception)
+        return request.replace(dont_filter=True)  # 把请求放回调度器重新爬，把去重关闭
+
+
+from scrapy.http import HtmlResponse
+
+
+class PhantomJSDownloaderMiddleware(object):
+
+    @classmethod
+    def process_request(cls, request, spider):
+        if spider.name == 'DB':
+            __pt_driver__ = spider.__pt_driver__
+            __pt_driver__.get(request.url)
+            body = __pt_driver__.page_source
+            return HtmlResponse(request.url, body=body, encoding='utf-8', request=request)
+        else:
+            return None
+10.什么是Itemloader？
+
+       一种容器，实现直白高效字段提取
+
+直接赋值取值的方式，会出现一下几个问题
+
+    代码量一多，各种css和xpath选择器，充斥整个代码逻辑，没有规则，不利于维护
+    对于一个字段的预处理，不明确，也不应该出现在主逻辑中
+
+如何解决以上两个问题？
+
+       通过scrapy中的ItemLoader模块来处理
+
+那如何使用呢？
+
+　　1. 声明一个容器
+
+　　2. 往容器中添加值
+
+　　3. 加载容器
+
+　　4. 把值传yield给 items
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+	
+def analysie_go(self, response):
+    """解析页面，提取字段值"""
+    # 通过response.meta.get方式获取meta传过来的值
+    img_url = response.meta.get('img_url', '0')
+    # 声明一个容器，接收item实例和response参数
+    load_item = ItemLoader(item=JobboleItem(), response=response)
+    # 指定value添加值
+    load_item.add_value('img_url', img_url)
+    load_item.add_value('cont_url', response.url)
+    load_item.add_value('cont_id', response.url)
+    # css方式解析值
+    load_item.add_css('title', '.entry-header h1::text')
+    load_item.add_css('publish_time', '.entry-meta-hide-on-mobile::text')
+    # xpath解析值
+    load_item.add_xpath('cont', '//div[@class="entry"]//text()')
+    load_item.add_css('link_num', '.vote-post-up h10::text')
+    load_item.add_css('collection_num', '.bookmark-btn::text')
+    load_item.add_css('comment_num', '.post-adds a span::text')
+    # 加载load_item()
+    article_items = load_item.load_item()
+    # 把获取的字段交给items
+    yield article_items
+
+
+11.item
+
+
+Item是保存结构数据的地方，Scrapy可以将解析结果以字典形式返回，但是Python中字典缺少结构，在大型爬虫系统中很不方便。
+
+Item提供了类字典的API，并且可以很方便的声明字段，很多Scrapy组件可以利用Item的其他信息。
+定义Item
+
+定义Item非常简单，只需要继承scrapy.Item类，并将所有字段都定义为scrapy.Field类型即可
+
+[python] view plain copy
+
+    import scrapy  
+      
+    class Product(scrapy.Item):  
+        name = scrapy.Field()  
+        price = scrapy.Field()  
+        stock = scrapy.Field()  
+        last_updated = scrapy.Field(serializer=str)  
+
+Item Fields
+
+Field对象可用来对每个字段指定元数据。例如上面last_updated的序列化函数指定为str，可任意指定元数据，不过每种元数据对于不同的组件意义不一样。
+Item使用示例
+
+你会看到Item的使用跟Python中的字典API非常类似
+创建Item
+
+[python] view plain copy
+
+    >>> product = Product(name='Desktop PC', price=1000)  
+    >>> print product  
+    Product(name='Desktop PC', price=1000)  
+
+获取值
+
+[python] view plain copy
+
+    >>> product['name']  
+    Desktop PC  
+    >>> product.get('name')  
+    Desktop PC  
+      
+    >>> product['price']  
+    1000  
+      
+    >>> product['last_updated']  
+    Traceback (most recent call last):  
+        ...  
+    KeyError: 'last_updated'  
+      
+    >>> product.get('last_updated', 'not set')  
+    not set  
+      
+    >>> product['lala'] # getting unknown field  
+    Traceback (most recent call last):  
+        ...  
+    KeyError: 'lala'  
+      
+    >>> product.get('lala', 'unknown field')  
+    'unknown field'  
+      
+    >>> 'name' in product  # is name field populated?  
+    True  
+      
+    >>> 'last_updated' in product  # is last_updated populated?  
+    False  
+      
+    >>> 'last_updated' in product.fields  # is last_updated a declared field?  
+    True  
+      
+    >>> 'lala' in product.fields  # is lala a declared field?  
+    False  
+
+设置值
+
+[python] view plain copy
+
+    >>> product['last_updated'] = 'today'  
+    >>> product['last_updated']  
+    today  
+      
+    >>> product['lala'] = 'test' # setting unknown field  
+    Traceback (most recent call last):  
+        ...  
+    KeyError: 'Product does not support field: lala'  
+
+访问所有的值
+
+[python] view plain copy
+
+    >>> product.keys()  
+    ['price', 'name']  
+      
+    >>> product.items()  
+    [('price', 1000), ('name', 'Desktop PC')]  
+
+Item Loader
+
+Item Loader为我们提供了生成Item的相当便利的方法。Item为抓取的数据提供了容器，而Item Loader可以让我们非常方便的将输入填充到容器中。
+
+下面我们通过一个例子来展示一般使用方法：
+
+[python] view plain copy
+
+    from scrapy.loader import ItemLoader  
+    from myproject.items import Product  
+      
+    def parse(self, response):  
+        l = ItemLoader(item=Product(), response=response)  
+        l.add_xpath('name', '//div[@class="product_name"]')  
+        l.add_xpath('name', '//div[@class="product_title"]')  
+        l.add_xpath('price', '//p[@id="price"]')  
+        l.add_css('stock', 'p#stock]')  
+        l.add_value('last_updated', 'today') # you can also use literal values  
+        return l.load_item()  
+
+注意上面的name字段是从两个xpath路径添累加后得到。
+输入/输出处理器
+
+每个Item Loader对每个Field都有一个输入处理器和一个输出处理器。输入处理器在数据被接受到时执行，当数据收集完后调用ItemLoader.load_item()时再执行输出处理器，返回最终结果。
+
+[python] view plain copy
+
+    l = ItemLoader(Product(), some_selector)  
+    l.add_xpath('name', xpath1) # (1)  
+    l.add_xpath('name', xpath2) # (2)  
+    l.add_css('name', css) # (3)  
+    l.add_value('name', 'test') # (4)  
+    return l.load_item() # (5)  
+
+执行流程是这样的：
+
+    xpath1中的数据被提取出来，然后传输到name字段的输入处理器中，在输入处理器处理完后生成结果放在Item Loader里面(这时候没有赋值给item)
+    xpath2数据被提取出来，然后传输给(1)中同样的输入处理器，因为它们都是name字段的处理器，然后处理结果被附加到(1)的结果后面
+    跟2一样
+    跟3一样，不过这次是直接的字面字符串值，先转换成一个单元素的可迭代对象再传给输入处理器
+    上面4步的数据被传输给name的输出处理器，将最终的结果赋值给name字段
+
+自定义Item Loader
+
+使用类定义语法，下面是一个例子
+
+[python] view plain copy
+
+    from scrapy.loader import ItemLoader  
+    from scrapy.loader.processors import TakeFirst, MapCompose, Join  
+      
+    class ProductLoader(ItemLoader):  
+      
+        default_output_processor = TakeFirst()  
+      
+        name_in = MapCompose(unicode.title)  
+        name_out = Join()  
+      
+        price_in = MapCompose(unicode.strip)  
+      
+        # ...  
+
+通过_in和_out后缀来定义输入和输出处理器，并且还可以定义默认的ItemLoader.default_input_processor和ItemLoader.default_input_processor.
+在Field定义中声明输入/输出处理器
+
+还有个地方可以非常方便的添加输入/输出处理器，那就是直接在Field定义中
+
+[python] view plain copy
+
+    import scrapy  
+    from scrapy.loader.processors import Join, MapCompose, TakeFirst  
+    from w3lib.html import remove_tags  
+      
+    def filter_price(value):  
+        if value.isdigit():  
+            return value  
+      
+    class Product(scrapy.Item):  
+        name = scrapy.Field(  
+            input_processor=MapCompose(remove_tags),  
+            output_processor=Join(),  
+        )  
+        price = scrapy.Field(  
+            input_processor=MapCompose(remove_tags, filter_price),  
+            output_processor=TakeFirst(),  
+        )  
+
+优先级：
+
+    在Item Loader中定义的field_in和field_out
+    Filed元数据(input_processor和output_processor关键字)
+    Item Loader中的默认的
+
+Tips：一般来讲，将输入处理器定义在Item Loader的定义中field_in，然后将输出处理器定义在Field元数据中
+Item Loader上下文
+
+Item Loader上下文被所有输入/输出处理器共享，比如你有一个解析长度的函数
+
+[python] view plain copy
+
+    def parse_length(text, loader_context):  
+        unit = loader_context.get('unit', 'm')  
+        # ... length parsing code goes here ...  
+        return parsed_length  
+
+初始化和修改上下文的值
+
+[python] view plain copy
+
+    loader = ItemLoader(product)  
+    loader.context['unit'] = 'cm'  
+      
+    loader = ItemLoader(product, unit='cm')  
+      
+    class ProductLoader(ItemLoader):  
+        length_out = MapCompose(parse_length, unit='cm')  
+
+内置的处理器
+
+    Identity 啥也不做
+    TakeFirst 返回第一个非空值，通常用作输出处理器
+    Join 将结果连起来，默认使用空格’ ‘
+    Compose 将函数链接起来形成管道流，产生最后的输出
+    MapCompose 跟上面的Compose类似，区别在于内部结果在函数中的传递方式.它的输入值是可迭代的，首先将第一个函数依次作用于所有值，产生新的可迭代输入，作为第二个函数的输入，最后生成的结果连起来返回最终值，一般用在输入处理器中。
+    SelectJmes 使用json路径来查询值并返回结果
+

@@ -1,0 +1,2041 @@
+1.BeautifulSoup简单使用
+1、from bs4 import BeautifulSoup
+
+#导入库
+
+2、请求头herders
+
+headers={'User-Agent': 'Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.110 Safari/537.36','referer':"www.mmjpg.com" }
+all_url = 'http://www.mmjpg.com/' 
+'User-Agent':请求方式  
+'referer':从哪个链接跳转进来的
+
+3、建立连接
+
+start_html = requests.get(all_url,  headers=headers)
+all_url：起始的地址，也就是访问的第一个页面
+headers：请求头，告诉服务器是谁来了。
+requests.get：一个方法能获取all_url的页面内容并且返回内容。
+
+4、解析获取的页面
+
+Soup = BeautifulSoup(start_html.text, 'lxml')
+BeautifulSoup：解析页面
+lxml：解析器
+start_html.text：页面的内容
+
+5、处理获取的页面
+
+all_a = Soup.find('div', class_='pic').find_all('a')[-2]
+Soup.find（）查找某一个
+find_all（）查找所有的，返回一个列表
+.find('img')['src']    ：获取img的src链接属性    
+class__:获取目标的类名
+div/a:类型条件为div/a的
+[-2]可以用来去掉最后多匹配的标签，这里表示去掉最后两个a标签
+
+6、获取目标内容
+
+<a href =# >内容</a>
+a[i]/get_text():获取第i个a标签里面的内容
+
+7、可能用到的其他功能介绍：
+1、文件夹创建与切换
+
+os.makedirs(os.path.join("E:\name", filename))
+#在目录E:\name下创建名为filename的文件夹
+os.chdir("E:\name\\" + filename)
+#切换工作路径到E:\name\filename下
+
+2、文件保存
+
+f = open(name+'.jpg', 'ab')##写入多媒体文件必须要 b 这个参数！
+f.write(img.content) ##多媒体文件要是用conctent！
+f.close()
+
+案例：爬取妹纸图
+
+    
+import requests
+from bs4 import BeautifulSoup
+import os
+#导入所需要的模块
+class mzitu():
+    def all_url(self, url):
+        html = self.request(url)##
+        all_a = BeautifulSoup(html.text, 'lxml').find('div', class_='all').find_all('a')
+        for a in all_a:
+            title = a.get_text()
+            print('------开始保存：', title) 
+            path = str(title).replace("?", '_') ##替换掉带有的？
+            self.mkdir(path) ##调用mkdir函数创建文件夹！这儿path代表的是标题title
+            href = a['href']
+            self.html(href) 
+
+    def html(self, href):   ##获得图片的页面地址
+        html = self.request(href)
+        max_span = BeautifulSoup(html.text, 'lxml').find('div', class_='pagenavi').find_all('span')[-2].get_text()
+        #这个上面有提到
+        for page in range(1, int(max_span) + 1):
+            page_url = href + '/' + str(page)
+            self.img(page_url) ##调用img函数
+
+    def img(self, page_url): ##处理图片页面地址获得图片的实际地址
+        img_html = self.request(page_url)
+        img_url = BeautifulSoup(img_html.text, 'lxml').find('div', class_='main-image').find('img')['src']
+        self.save(img_url)
+
+    def save(self, img_url): ##保存图片
+        name = img_url[-9:-4]
+        img = self.request(img_url)
+        f = open(name + '.jpg', 'ab')
+        f.write(img.content)
+        f.close()
+
+    def mkdir(self, path): ##创建文件夹
+        path = path.strip()
+        isExists = os.path.exists(os.path.join("E:\mzitu2", path))
+        if not isExists:
+            print('建了一个名字叫做', path, '的文件夹！')
+            os.makedirs(os.path.join("E:\mzitu2", path))
+            os.chdir(os.path.join("E:\mzitu2", path)) ##切换到目录
+            return True
+        else:
+            print( path, '文件夹已经存在了！')
+            return False
+
+    def request(self, url): ##这个函数获取网页的response 然后返回
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.110 Safari/537.36',
+            'referer':#伪造一个访问来源 "http://www.mzitu.com/100260/2"
+        }
+        content = requests.get(url, headers=headers)
+        return content
+#设置启动函数
+def main():
+    Mzitu = mzitu() ##实例化
+    Mzitu.all_url('http://www.mzitu.com/all') ##给函数all_url传入参数  
+
+main()
+
+
+二.requests包
+ 一、安装 Requests
+
+通过pip安装
+
+pip install requests
+
+或者，下载代码后安装：
+
+$ git clone git://github.com/kennethreitz/requests.git
+$ cd requests
+$ python setup.py install
+
+再懒一点，通过IDE安装吧，如pycharm！
+二、发送请求与传递参数
+
+先来一个简单的例子吧！让你了解下其威力：
+复制代码
+
+import requests
+ 
+r = requests.get(url='http://www.itwhy.org')    # 最基本的GET请求
+print(r.status_code)    # 获取返回状态
+r = requests.get(url='http://dict.baidu.com/s', params={'wd':'python'})   #带参数的GET请求
+print(r.url)
+print(r.text)   #打印解码后的返回数据
+
+复制代码
+
+很简单吧！不但GET方法简单，其他方法都是统一的接口样式哦！
+
+    requests.get(‘https://github.com/timeline.json’) #GET请求
+    requests.post(“http://httpbin.org/post”) #POST请求
+    requests.put(“http://httpbin.org/put”) #PUT请求
+    requests.delete(“http://httpbin.org/delete”) #DELETE请求
+    requests.head(“http://httpbin.org/get”) #HEAD请求
+    requests.options(“http://httpbin.org/get”) #OPTIONS请求
+
+PS：以上的HTTP方法，对于WEB系统一般只支持 GET 和 POST，有一些还支持 HEAD 方法。
+带参数的请求实例：
+
+import requests
+requests.get('http://www.dict.baidu.com/s', params={'wd': 'python'})    #GET参数实例
+requests.post('http://www.itwhy.org/wp-comments-post.php', data={'comment': '测试POST'})    #POST参数实例
+
+POST发送JSON数据：
+
+import requests
+import json
+ 
+r = requests.post('https://api.github.com/some/endpoint', data=json.dumps({'some': 'data'}))
+print(r.json())
+
+定制header：
+复制代码
+
+import requests
+import json
+ 
+data = {'some': 'data'}
+headers = {'content-type': 'application/json',
+           'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:22.0) Gecko/20100101 Firefox/22.0'}
+ 
+r = requests.post('https://api.github.com/some/endpoint', data=data, headers=headers)
+print(r.text)
+
+复制代码
+三、Response对象
+
+使用requests方法后，会返回一个response对象，其存储了服务器响应的内容，如上实例中已经提到的 r.text、r.status_code……
+获取文本方式的响应体实例：当你访问 r.text 之时，会使用其响应的文本编码进行解码，并且你可以修改其编码让 r.text 使用自定义的编码进行解码。
+
+r = requests.get('http://www.itwhy.org')
+print(r.text, '\n{}\n'.format('*'*79), r.encoding)
+r.encoding = 'GBK'
+print(r.text, '\n{}\n'.format('*'*79), r.encoding)
+
+其他响应：
+
+    r.status_code #响应状态码
+    r.raw #返回原始响应体，也就是 urllib 的 response 对象，使用 r.raw.read() 读取
+    r.content #字节方式的响应体，会自动为你解码 gzip 和 deflate 压缩
+    r.text #字符串方式的响应体，会自动根据响应头部的字符编码进行解码
+    r.headers #以字典对象存储服务器响应头，但是这个字典比较特殊，字典键不区分大小写，若键不存在则返回None
+    #*特殊方法*#
+    r.json() #Requests中内置的JSON解码器
+    r.raise_for_status() #失败请求(非200响应)抛出异常
+
+案例之一：
+复制代码
+
+import requests
+ 
+URL = 'http://ip.taobao.com/service/getIpInfo.php'  # 淘宝IP地址库API
+try:
+    r = requests.get(URL, params={'ip': '8.8.8.8'}, timeout=1)
+    r.raise_for_status()    # 如果响应状态码不是 200，就主动抛出异常
+except requests.RequestException as e:
+    print(e)
+else:
+    result = r.json()
+    print(type(result), result, sep='\n')
+
+复制代码
+四、上传文件
+
+使用 Requests 模块，上传文件也是如此简单的，文件的类型会自动进行处理：
+复制代码
+
+import requests
+ 
+url = 'http://127.0.0.1:5000/upload'
+files = {'file': open('/home/lyb/sjzl.mpg', 'rb')}
+#files = {'file': ('report.jpg', open('/home/lyb/sjzl.mpg', 'rb'))}     #显式的设置文件名
+ 
+r = requests.post(url, files=files)
+print(r.text)
+
+复制代码
+
+更加方便的是，你可以把字符串当着文件进行上传：
+复制代码
+
+import requests
+ 
+url = 'http://127.0.0.1:5000/upload'
+files = {'file': ('test.txt', b'Hello Requests.')}     #必需显式的设置文件名
+ 
+r = requests.post(url, files=files)
+print(r.text)
+
+复制代码
+五、身份验证
+
+基本身份认证(HTTP Basic Auth):
+
+import requests
+from requests.auth import HTTPBasicAuth
+ 
+r = requests.get('https://httpbin.org/hidden-basic-auth/user/passwd', auth=HTTPBasicAuth('user', 'passwd'))
+# r = requests.get('https://httpbin.org/hidden-basic-auth/user/passwd', auth=('user', 'passwd'))    # 简写
+print(r.json())
+
+另一种非常流行的HTTP身份认证形式是摘要式身份认证，Requests对它的支持也是开箱即可用的:
+
+requests.get(URL, auth=HTTPDigestAuth('user', 'pass'))
+
+六、Cookies与会话对象
+
+如果某个响应中包含一些Cookie，你可以快速访问它们：
+
+import requests
+ 
+r = requests.get('http://www.google.com.hk/')
+print(r.cookies['NID'])
+print(tuple(r.cookies))
+
+要想发送你的cookies到服务器，可以使用 cookies 参数：
+复制代码
+
+import requests
+ 
+url = 'http://httpbin.org/cookies'
+cookies = {'testCookies_1': 'Hello_Python3', 'testCookies_2': 'Hello_Requests'}
+# 在Cookie Version 0中规定空格、方括号、圆括号、等于号、逗号、双引号、斜杠、问号、@，冒号，分号等特殊符号都不能作为Cookie的内容。
+r = requests.get(url, cookies=cookies)
+print(r.json())
+
+复制代码
+
+会话对象让你能够跨请求保持某些参数，最方便的是在同一个Session实例发出的所有请求之间保持cookies，且这些都是自动处理的，甚是方便。
+下面就来一个真正的实例，如下是快盘签到脚本：
+复制代码
+
+import requests
+ 
+headers = {'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+           'Accept-Encoding': 'gzip, deflate, compress',
+           'Accept-Language': 'en-us;q=0.5,en;q=0.3',
+           'Cache-Control': 'max-age=0',
+           'Connection': 'keep-alive',
+           'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:22.0) Gecko/20100101 Firefox/22.0'}
+ 
+s = requests.Session()
+s.headers.update(headers)
+# s.auth = ('superuser', '123')
+s.get('https://www.kuaipan.cn/account_login.htm')
+ 
+_URL = 'http://www.kuaipan.cn/index.php'
+s.post(_URL, params={'ac':'account', 'op':'login'},
+       data={'username':'****@foxmail.com', 'userpwd':'********', 'isajax':'yes'})
+r = s.get(_URL, params={'ac':'zone', 'op':'taskdetail'})
+print(r.json())
+s.get(_URL, params={'ac':'common', 'op':'usersign'})
+
+复制代码
+七、超时与异常
+
+timeout 仅对连接过程有效，与响应体的下载无关。
+
+>>> requests.get('http://github.com', timeout=0.001)
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+requests.exceptions.Timeout: HTTPConnectionPool(host='github.com', port=80): Request timed out. (timeout=0.001)
+
+所有Requests显式抛出的异常都继承自 requests.exceptions.RequestException：ConnectionError、HTTPError、Timeout、TooManyRedirects。
+
+转自:http://www.itwhy.org/%E8%BD%AF%E4%BB%B6%E5%B7%A5%E7%A8%8B/python/python-%E7%AC%AC%E4%B8%89%E6%96%B9-http-%E5%BA%93-requests-%E5%AD%A6%E4%B9%A0.html
+
+ 
+
+requests是python的一个HTTP客户端库，跟urllib，urllib2类似，那为什么要用requests而不用urllib2呢？官方文档中是这样说明的：
+
+    python的标准库urllib2提供了大部分需要的HTTP功能，但是API太逆天了，一个简单的功能就需要一大堆代码。
+
+我也看了下requests的文档，确实很简单，适合我这种懒人。下面就是一些简单指南。
+
+    插播个好消息！刚看到requests有了中文翻译版，建议英文不好的看看，内容也比我的博客好多了，具体链接是：http://cn.python-requests.org/en/latest/(不过是v1.1.0版，另抱歉，之前贴错链接了)。
+
+1. 安装
+
+安装很简单，我是win系统，就在这里下载了安装包（网页中download the zipball处链接），然后$ python setup.py install就装好了。
+当然，有easy_install或pip的朋友可以直接使用：easy_install requests或者pip install requests来安装。
+至于linux用户，这个页面还有其他安装方法。
+测试：在IDLE中输入import requests，如果没提示错误，那说明已经安装成功了！
+2. 小试牛刀
+
+>>>import requests
+>>> r = requests.get('http://www.zhidaow.com')  # 发送请求
+>>> r.status_code  # 返回码 
+200
+>>> r.headers['content-type']  # 返回头部信息
+'text/html; charset=utf8'
+>>> r.encoding  # 编码信息
+'utf-8'
+>>> r.text  #内容部分（PS，由于编码问题，建议这里使用r.content）
+u'<!DOCTYPE html>\n<html xmlns="http://www.w3.org/1999/xhtml"...'
+...
+
+是不是很简单？比urllib2和urllib简单直观的多？！那请接着看快速指南吧。
+3. 快速指南
+3.1 发送请求
+
+发送请求很简单的，首先要导入requests模块：
+
+>>>import requests
+
+接下来让我们获取一个网页，例如我个人博客的首页：
+
+>>>r = requests.get('http://www.zhidaow.com')
+
+接下来，我们就可以使用这个r的各种方法和函数了。
+另外，HTTP请求还有很多类型，比如POST,PUT,DELETE,HEAD,OPTIONS。也都可以用同样的方式实现：
+
+>>> r = requests.post("http://httpbin.org/post")
+>>> r = requests.put("http://httpbin.org/put")
+>>> r = requests.delete("http://httpbin.org/delete")
+>>> r = requests.head("http://httpbin.org/get")
+>>> r = requests.options("http://httpbin.org/get")
+
+因为目前我还没用到这些，所以没有深入研究。
+3.2 在URLs中传递参数
+
+有时候我们需要在URL中传递参数，比如在采集百度搜索结果时，我们wd参数（搜索词）和rn参数（搜素结果数量），你可以手工组成URL，requests也提供了一种看起来很NB的方法：
+
+>>> payload = {'wd': '张亚楠', 'rn': '100'}
+>>> r = requests.get("http://www.baidu.com/s", params=payload)
+>>> print r.url
+u'http://www.baidu.com/s?rn=100&wd=%E5%BC%A0%E4%BA%9A%E6%A5%A0'
+
+上面wd=的乱码就是“张亚楠”的转码形式。（好像参数按照首字母进行了排序。）
+3.3 获取响应内容
+
+可以通过r.text来获取网页的内容。
+
+>>> r = requests.get('https://www.zhidaow.com')
+>>> r.text
+u'<!DOCTYPE html>\n<html xmlns="http://www.w3.org/1999/xhtml"...'
+
+文档里说，requests会自动将内容转码。大多数unicode字体都会无缝转码。但我在cygwin下使用时老是出现UnicodeEncodeError错误，郁闷。倒是在python的IDLE中完全正常。
+另外，还可以通过r.content来获取页面内容。
+
+>>> r = requests.get('https://www.zhidaow.com')
+>>> r.content
+b'<!DOCTYPE html>\n<html xmlns="http://www.w3.org/1999/xhtml"...'
+
+文档中说r.content是以字节的方式去显示，所以在IDLE中以b开头。但我在cygwin中用起来并没有，下载网页正好。所以就替代了urllib2的urllib2.urlopen(url).read()功能。（基本上是我用的最多的一个功能。）
+3.4 获取网页编码
+
+可以使用r.encoding来获取网页编码。
+
+>>> r = requests.get('http://www.zhidaow.com')
+>>> r.encoding
+'utf-8'
+
+当你发送请求时，requests会根据HTTP头部来猜测网页编码，当你使用r.text时，requests就会使用这个编码。当然你还可以修改requests的编码形式。
+
+>>> r = requests.get('http://www.zhidaow.com')
+>>> r.encoding
+'utf-8'
+>>>r.encoding = 'ISO-8859-1'
+
+像上面的例子，对encoding修改后就直接会用修改后的编码去获取网页内容。
+3.5 json
+
+像urllib和urllib2，如果用到json，就要引入新模块，如json和simplejson，但在requests中已经有了内置的函数，r.json()。就拿查询IP的API来说：
+
+>>>r = requests.get('http://ip.taobao.com/service/getIpInfo.php?ip=122.88.60.28')
+>>>r.json()['data']['country']
+'中国'
+
+3.6 网页状态码
+
+我们可以用r.status_code来检查网页的状态码。
+
+>>>r = requests.get('http://www.mengtiankong.com')
+>>>r.status_code
+200
+>>>r = requests.get('http://www.mengtiankong.com/123123/')
+>>>r.status_code
+404
+>>>r = requests.get('http://www.baidu.com/link?url=QeTRFOS7TuUQRppa0wlTJJr6FfIYI1DJprJukx4Qy0XnsDO_s9baoO8u1wvjxgqN')
+>>>r.url
+u'http://www.zhidaow.com/
+>>>r.status_code
+200
+
+前两个例子很正常，能正常打开的返回200，不能正常打开的返回404。但第三个就有点奇怪了，那个是百度搜索结果中的302跳转地址，但状态码显示是200，接下来我用了一招让他原形毕露：
+
+>>>r.history
+(<Response [302]>,)
+
+这里能看出他是使用了302跳转。也许有人认为这样可以通过判断和正则来获取跳转的状态码了，其实还有个更简单的方法：
+
+>>>r = requests.get('http://www.baidu.com/link?url=QeTRFOS7TuUQRppa0wlTJJr6FfIYI1DJprJukx4Qy0XnsDO_s9baoO8u1wvjxgqN', allow_redirects = False)
+>>>r.status_code
+302
+
+只要加上一个参数allow_redirects，禁止了跳转，就直接出现跳转的状态码了，好用吧？我也利用这个在最后一掌做了个简单的获取网页状态码的小应用，原理就是这个。
+3.7 响应头内容
+
+可以通过r.headers来获取响应头内容。
+
+>>>r = requests.get('http://www.zhidaow.com')
+>>> r.headers
+{
+    'content-encoding': 'gzip',
+    'transfer-encoding': 'chunked',
+    'content-type': 'text/html; charset=utf-8';
+    ...
+}
+
+可以看到是以字典的形式返回了全部内容，我们也可以访问部分内容。
+
+>>> r.headers['Content-Type']
+'text/html; charset=utf-8'
+
+>>> r.headers.get('content-type')
+'text/html; charset=utf-8'
+
+3.8 设置超时时间
+
+我们可以通过timeout属性设置超时时间，一旦超过这个时间还没获得响应内容，就会提示错误。
+
+>>> requests.get('http://github.com', timeout=0.001)
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+requests.exceptions.Timeout: HTTPConnectionPool(host='github.com', port=80): Request timed out. (timeout=0.001)
+
+3.9 代理访问
+
+采集时为避免被封IP，经常会使用代理。requests也有相应的proxies属性。
+
+import requests
+
+proxies = {
+  "http": "http://10.10.1.10:3128",
+  "https": "http://10.10.1.10:1080",
+}
+
+requests.get("http://www.zhidaow.com", proxies=proxies)
+
+如果代理需要账户和密码，则需这样：
+
+proxies = {
+    "http": "http://user:pass@10.10.1.10:3128/",
+}
+
+3.10 请求头内容
+
+请求头内容可以用r.request.headers来获取。
+
+>>> r.request.headers
+{'Accept-Encoding': 'identity, deflate, compress, gzip',
+'Accept': '*/*', 'User-Agent': 'python-requests/1.2.3 CPython/2.7.3 Windows/XP'}
+
+3.11 自定义请求头部
+
+伪装请求头部是采集时经常用的，我们可以用这个方法来隐藏：
+
+r = requests.get('http://www.zhidaow.com')
+print r.request.headers['User-Agent']
+#python-requests/1.2.3 CPython/2.7.3 Windows/XP
+
+headers = {'User-Agent': 'alexkh'}
+r = requests.get('http://www.zhidaow.com', headers = headers)
+print r.request.headers['User-Agent']
+#alexkh
+
+3.12 持久连接keep-alive
+
+        requests的keep-alive是基于urllib3，同一会话内的持久连接完全是自动的。同一会话内的所有请求都会自动使用恰当的连接。
+
+也就是说，你无需任何设置，requests会自动实现keep-alive。
+4. 简单应用
+4.1 获取网页返回码
+
+def get_status(url):
+    r = requests.get(url, allow_redirects = False)
+    return r.status_code
+
+print get_status('http://www.zhidaow.com') 
+#200
+print get_status('http://www.zhidaow.com/hi404/')
+#404
+print get_status('http://mengtiankong.com')
+#301
+print get_status('http://www.baidu.com/link?url=QeTRFOS7TuUQRppa0wlTJJr6FfIYI1DJprJukx4Qy0XnsDO_s9baoO8u1wvjxgqN')
+#302
+print get_status('http://www.huiya56.com/com8.intre.asp?46981.html')
+#500
+
+三、爬虫bibei
+1. name，标签名称
+
+1 # tag = soup.find('a')
+2 # name = tag.name # 获取
+3 # print(name)
+4 # tag.name = 'span' # 设置
+5 # print(soup)
+
+2. attr，标签属性
+
+1 # tag = soup.find('a')
+2 # attrs = tag.attrs    # 获取
+3 # print(attrs)
+4 # tag.attrs = {'ik':123} # 设置
+5 # tag.attrs['id'] = 'iiiii' # 设置
+6 # print(soup)
+
+3. children,所有子标签
+
+1 # body = soup.find('body')
+2 # v = body.children
+
+4. descendants,所有子子孙孙标签
+
+1 # body = soup.find('body')
+2 # v = body.descendants
+
+5. clear,将标签的所有子标签全部清空（保留标签名）
+
+1 # tag = soup.find('body')
+2 # tag.clear()
+3 # print(soup)
+
+6. decompose,递归的删除所有的标签
+
+1 # body = soup.find('body')
+2 # body.decompose()
+3 # print(soup)
+
+7. extract,递归的删除所有的标签，并获取删除的标签
+
+1 # body = soup.find('body')
+2 # v = body.extract()
+3 # print(soup)
+
+8. decode,转换为字符串（含当前标签）；decode_contents（不含当前标签）
+
+1 # body = soup.find('body')
+2 # v = body.decode()
+3 # v = body.decode_contents()
+4 # print(v)
+
+9. encode,转换为字节（含当前标签）；encode_contents（不含当前标签）
+
+1 # body = soup.find('body')
+2 # v = body.encode()
+3 # v = body.encode_contents()
+4 # print(v)
+
+10. find,获取匹配的第一个标签
+
+1 # tag = soup.find('a')
+2 # print(tag)
+3 # tag = soup.find(name='a', attrs={'class': 'sister'}, recursive=True, text='Lacie')
+4 # tag = soup.find(name='a', class_='sister', recursive=True, text='Lacie')
+5 # print(tag)
+
+11. find_all,获取匹配的所有标签
+View Code
+
+12. has_attr,检查标签是否具有该属性
+
+1 # tag = soup.find('a')
+2 # v = tag.has_attr('id')
+3 # print(v)
+
+13. get_text,获取标签内部文本内容
+
+1 # tag = soup.find('a')
+2 # v = tag.get_text('id')
+3 # print(v)
+
+14. index,检查标签在某标签中的索引位置
+复制代码
+
+1 # tag = soup.find('body')
+2 # v = tag.index(tag.find('div'))
+3 # print(v)
+4  
+5 # tag = soup.find('body')
+6 # for i,v in enumerate(tag):
+7 # print(i,v)
+
+复制代码
+
+15. is_empty_element,是否是空标签(是否可以是空)或者自闭合标签，
+
+     判断是否是如下标签：'br' , 'hr', 'input', 'img', 'meta','spacer', 'link', 'frame', 'base'
+
+1 # tag = soup.find('br')
+2 # v = tag.is_empty_element
+3 # print(v)
+
+16. 当前的关联标签
+复制代码
+
+ 1 # soup.next
+ 2 # soup.next_element
+ 3 # soup.next_elements
+ 4 # soup.next_sibling
+ 5 # soup.next_siblings
+ 6  
+ 7 #
+ 8 # tag.previous
+ 9 # tag.previous_element
+10 # tag.previous_elements
+11 # tag.previous_sibling
+12 # tag.previous_siblings
+13  
+14 #
+15 # tag.parent
+16 # tag.parents
+
+复制代码
+
+17. 查找某标签的关联标签
+复制代码
+
+ 1 # tag.find_next(...)
+ 2 # tag.find_all_next(...)
+ 3 # tag.find_next_sibling(...)
+ 4 # tag.find_next_siblings(...)
+ 5  
+ 6 # tag.find_previous(...)
+ 7 # tag.find_all_previous(...)
+ 8 # tag.find_previous_sibling(...)
+ 9 # tag.find_previous_siblings(...)
+10  
+11 # tag.find_parent(...)
+12 # tag.find_parents(...)
+13  
+14 # 参数同find_all
+
+复制代码
+
+18. select,select_one, CSS选择器
+View Code
+
+19. 标签的内容
+复制代码
+
+ 1 # tag = soup.find('span')
+ 2 # print(tag.string)          # 获取
+ 3 # tag.string = 'new content' # 设置
+ 4 # print(soup)
+ 5  
+ 6 # tag = soup.find('body')
+ 7 # print(tag.string)
+ 8 # tag.string = 'xxx'
+ 9 # print(soup)
+10  
+11 # tag = soup.find('body')
+12 # v = tag.stripped_strings  # 递归内部获取所有标签的文本
+13 # print(v)
+
+复制代码
+
+20.append在当前标签内部追加一个标签
+复制代码
+
+ 1 # tag = soup.find('body')
+ 2 # tag.append(soup.find('a'))
+ 3 # print(soup)
+ 4 #
+ 5 # from bs4.element import Tag
+ 6 # obj = Tag(name='i',attrs={'id': 'it'})
+ 7 # obj.string = '我是一个新来的'
+ 8 # tag = soup.find('body')
+ 9 # tag.append(obj)
+10 # print(soup)
+
+复制代码
+
+21.insert在当前标签内部指定位置插入一个标签
+
+1 # from bs4.element import Tag
+2 # obj = Tag(name='i', attrs={'id': 'it'})
+3 # obj.string = '我是一个新来的'
+4 # tag = soup.find('body')
+5 # tag.insert(2, obj)
+6 # print(soup)
+
+22. insert_after,insert_before 在当前标签后面或前面插入
+复制代码
+
+1 # from bs4.element import Tag
+2 # obj = Tag(name='i', attrs={'id': 'it'})
+3 # obj.string = '我是一个新来的'
+4 # tag = soup.find('body')
+5 # # tag.insert_before(obj)
+6 # tag.insert_after(obj)
+7 # print(soup)
+
+复制代码
+
+23. replace_with 在当前标签替换为指定标签
+
+1 # from bs4.element import Tag
+2 # obj = Tag(name='i', attrs={'id': 'it'})
+3 # obj.string = '我是一个新来的'
+4 # tag = soup.find('div')
+5 # tag.replace_with(obj)
+6 # print(soup)
+
+24. 创建标签之间的关系（但不会改变标签的位置）
+
+1 # tag = soup.find('div')
+2 # a = soup.find('a')
+3 # tag.setup(previous_sibling=a)
+4 # print(tag.previous_sibling)
+
+25. wrap，将指定标签把当前标签包裹起来
+复制代码
+
+ 1 # from bs4.element import Tag
+ 2 # obj1 = Tag(name='div', attrs={'id': 'it'})
+ 3 # obj1.string = '我是一个新来的'
+ 4 #
+ 5 # tag = soup.find('a')
+ 6 # v = tag.wrap(obj1)
+ 7 # print(soup)
+ 8  
+ 9 # tag = soup.find('a')
+10 # v = tag.wrap(soup.find('p'))
+11 # print(soup)
+
+复制代码
+
+26. unwrap，去掉当前标签，将保留其包裹的标签
+
+1 # tag = soup.find('a')
+2 # v = tag.unwrap()
+3 # print(soup)
+
+四、xpath
+XPath 是一门在 XML 或HTML文档中查找信息的语言。XPath 用于在 XML 和HTML文档中通过元素和属性进行导航。
+
+什么是 XPath?
+
+XPath 使用路径表达式在XML和HTML文档中进行导航。
+
+XPath 包含一个标准函数库。
+
+XPath 是一个 W3C 标准。
+
+二、XPath的节点关系
+
+节点（Node）是XPath 的术语。
+（图一）html
+
+1）父节点（Parent）
+
+每个元素以及属性都有一个父。在“（图一）html”的例子中，book 元素是 title、author、year 以及 price 元素的父。
+
+2）子节点（Children）
+
+元素节点可有零个、一个或多个子。在“（图一）html”的例子中，title、author、year 以及 price 元素都是 book 元素的子。
+
+3）同胞节点（Sibling）
+
+拥有相同的父的节点。在“（图一）html”的例子中，title、author、year 以及 price 元素都是同胞。
+
+4）先辈节点（Ancestor）
+
+某节点的父、父的父，等等。在“（图一）html”的例子中，title 元素的先辈是 book 元素和 bookstore 元素，
+
+5）后代节点（Descendant）
+
+某个节点的子，子的子，等等。在“（图一）html”的例子中，bookstore 的后代是 book、title、author、year 以及 price 元素。
+
+三、XPath的语法
+
+XPath 使用路径表达式在 XML 和HTML文档中选取节点。节点是通过沿着路径或者 step 来选取的。
+
+下面列出了最有用的路径表达式，掌握了这些表达式，可以完成89%的爬虫提取元素的需求。我们编写了将近一百个网站的各种各样的数据提取的XPath代码所涉及到的语法都包含在下面的表格中啦。
+XPath表达式清单
+
+    article 选取所有article元素的所有子节点
+
+    /article 选取根元素article
+
+    article/a 选取所有属于article的子元素的a元素
+
+    //div/ 选取所有div子元素（不论出现在文档任何地方）
+
+    article//div 选取所有属于article元素的后代的div元素，不管它出现在article下的任何位置
+
+    //@class 选取所有名为class的属性
+
+    /article/div[1] 选取属于article子元素的第一个div元素
+
+    /article/div[last()] 选取属于article子元素的最后一个div元素
+
+    /article/div[last()-1] 选取属于article子元素的倒数第二个div元素
+
+    //div[@class] 选取所有拥有class属性的div元素
+
+    //div[@class='article'] 选取所有class属性为article的div元素
+
+    //div[@class='article']/text() 选取所有class属性为article的div元素下的text值
+
+    /div/* 选取属于div元素的所有子节点
+
+    //* 选取所有元素
+
+    //div[@*] 选取所有带属性的div元素
+
+    //div/a|//div/p 选取所有div元素下的a和p元素
+
+    //span|//ul 选取文档中的span和ul元素
+
+    article/div/p|//span 选取所有属于article元素的div元素的p元素以及文档中所有的span元素
+
+四、使用XPath提取豆瓣读书书籍标题的示例
+
+我们还是以获取豆瓣读书的书籍信息为例来说明XPath的使用。
+获取豆瓣读书的书籍标题
+
+我们这里通过3种方法来提取这个书籍的标题值。
+
+1）方法一：从html开始一层一层往下找，使用Firefox浏览器自带的复制XPath功能使用的就是这个方式。
+
+    re1_selector = sel.xpath('/html/body/div[3]/div[1]/div/div[2]/ul/li[1]/div/h2/a/text()').extract()[0]
+
+2）方法二：找到特定的id元素，因为一个网页中id是唯一的，所以再基于这个id往下找也是可以提取到想要的值，使用Chrome浏览器自带的复制XPath功能使用的就是这个方式。
+
+    re2_selector = sel.xpath('//*[@id="content"]/div/div[2]/ul/li[1]/div/h2/a/text()').extract()[0]
+
+3）方法三：找到特定的其他非id元素，保障这个非id元素在你获取的规则中是唯一的，再基于这个非id元素往下找。
+
+    re3_selector = sel.xpath('//ul[@class="cover-col-4 clearfix"]/li[1]/div/h2/a/text()').extract()[0]
+
+
+
+
+五、RE正则
+正则表达式模式
+
+模式字符串使用特殊的语法来表示一个正则表达式：
+
+字母和数字表示他们自身。一个正则表达式模式中的字母和数字匹配同样的字符串。
+
+多数字母和数字前加一个反斜杠时会拥有不同的含义。
+
+标点符号只有被转义时才匹配自身，否则它们表示特殊的含义。
+
+反斜杠本身需要使用反斜杠转义。
+
+由于正则表达式通常都包含反斜杠，所以你最好使用原始字符串来表示它们。模式元素(如 r'/t'，等价于'//t')匹配相应的特殊字符。
+
+下表列出了正则表达式模式语法中的特殊元素。如果你使用模式的同时提供了可选的标志参数，某些模式元素的含义会改变。
+模式 	描述
+^ 	匹配字符串的开头
+$ 	匹配字符串的末尾。
+. 	匹配任意字符，除了换行符，当re.DOTALL标记被指定时，则可以匹配包括换行符的任意字符。
+[...] 	用来表示一组字符,单独列出：[amk] 匹配 'a'，'m'或'k'
+[^...] 	不在[]中的字符：[^abc] 匹配除了a,b,c之外的字符。
+re* 	匹配0个或多个的表达式。
+re+ 	匹配1个或多个的表达式。
+re? 	匹配0个或1个由前面的正则表达式定义的片段，非贪婪方式
+re{ n} 	 
+re{ n,} 	精确匹配n个前面表达式。
+re{ n, m} 	匹配 n 到 m 次由前面的正则表达式定义的片段，贪婪方式
+a| b 	匹配a或b
+(re) 	G匹配括号内的表达式，也表示一个组
+(?imx) 	正则表达式包含三种可选标志：i, m, 或 x 。只影响括号中的区域。
+(?-imx) 	正则表达式关闭 i, m, 或 x 可选标志。只影响括号中的区域。
+(?: re) 	类似 (...), 但是不表示一个组
+(?imx: re) 	在括号中使用i, m, 或 x 可选标志
+(?-imx: re) 	在括号中不使用i, m, 或 x 可选标志
+(?#...) 	注释.
+(?= re) 	前向肯定界定符。如果所含正则表达式，以 ... 表示，在当前位置成功匹配时成功，否则失败。但一旦所含表达式已经尝试，匹配引擎根本没有提高；模式的剩余部分还要尝试界定符的右边。
+(?! re) 	前向否定界定符。与肯定界定符相反；当所含表达式不能在字符串当前位置匹配时成功
+(?> re) 	匹配的独立模式，省去回溯。
+\w 	匹配字母数字及下划线
+\W 	匹配非字母数字及下划线
+\s 	匹配任意空白字符，等价于 [\t\n\r\f].
+\S 	匹配任意非空字符
+\d 	匹配任意数字，等价于 [0-9].
+\D 	匹配任意非数字
+\A 	匹配字符串开始
+\Z 	匹配字符串结束，如果是存在换行，只匹配到换行前的结束字符串。c
+\z 	匹配字符串结束
+\G 	匹配最后匹配完成的位置。
+\b 	匹配一个单词边界，也就是指单词和空格间的位置。例如， 'er\b' 可以匹配"never" 中的 'er'，但不能匹配 "verb" 中的 'er'。
+\B 	匹配非单词边界。'er\B' 能匹配 "verb" 中的 'er'，但不能匹配 "never" 中的 'er'。
+\n, \t, 等. 	匹配一个换行符。匹配一个制表符。等
+\1...\9 	匹配第n个分组的子表达式。
+\10 	匹配第n个分组的子表达式，如果它经匹配。否则指的是八进制字符码的表达式。
+正则表达式实例
+字符匹配
+实例 	描述
+python 	匹配 "python".
+字符类
+实例 	描述
+[Pp]ython 	匹配 "Python" 或 "python"
+rub[ye] 	匹配 "ruby" 或 "rube"
+[aeiou] 	匹配中括号内的任意一个字母
+[0-9] 	匹配任何数字。类似于 [0123456789]
+[a-z] 	匹配任何小写字母
+[A-Z] 	匹配任何大写字母
+[a-zA-Z0-9] 	匹配任何字母及数字
+[^aeiou] 	除了aeiou字母以外的所有字符
+[^0-9] 	匹配除了数字外的字符
+特殊字符类
+
+实例 	描述
+. 	匹配除 "\n" 之外的任何单个字符。要匹配包括 '\n' 在内的任何字符，请使用象 '[.\n]' 的模式。
+\d 	匹配一个数字字符。等价于 [0-9]。
+\D 	匹配一个非数字字符。等价于 [^0-9]。
+\s 	匹配任何空白字符，包括空格、制表符、换页符等等。等价于 [ \f\n\r\t\v]。
+\S 	匹配任何非空白字符。等价于 [^ \f\n\r\t\v]。
+\w 	匹配包括下划线的任何单词字符。等价于'[A-Za-z0-9_]'。
+\W 	匹配任何非单词字符。等价于 '[^A-Za-z0-9_]'。
+
+正则表达式修饰符 - 可选标志
+
+正则表达式可以包含一些可选标志修饰符来控制匹配的模式。修饰符被指定为一个可选的标志。多个标志可以通过按位 OR(|) 它们来指定。如 re.I | re.M 被设置成 I 和 M 标志：
+修饰符 	描述
+re.I 	使匹配对大小写不敏感
+re.L 	做本地化识别（locale-aware）匹配
+re.M 	多行匹配，影响 ^ 和 $
+re.S 	使 . 匹配包括换行在内的所有字符
+re.U 	根据Unicode字符集解析字符。这个标志影响 \w, \W, \b, \B.
+re.X 	该标志通过给予你更灵活的格式以便你将正则表达式写得更易于理解。
+
+Python中常用的正则表达式处理函数。
+
+正则对象（re object)
+
+        search():  最常用的，返回一个匹配对象(Match Object)
+        match()：类似search，但仅仅从文字的开始进行匹配；
+        split()：分割一个string，返回字符串的数组
+        findall()：找到所有的匹配字符串的清单(list)
+        finditer()：类似findall，返回匹配对象(Match Object)的iteration
+        sub(): 字符串替换
+        subn(): 类似sub, 但是同时返回替换的数量
+
+re.match函数
+
+re.match 尝试从字符串的起始位置匹配一个模式，如果不是起始位置匹配成功的话，match()就返回none。
+
+函数语法：
+
+re.match(pattern, string, flags=0)
+
+函数参数说明：
+参数 	描述
+pattern 	匹配的正则表达式
+string 	要匹配的字符串。
+flags 	标志位，用于控制正则表达式的匹配方式，如：是否区分大小写，多行匹配等等。
+
+
+匹配成功re.match方法返回一个匹配的对象，否则返回None。
+
+我们可以使用group(num) 或 groups() 匹配对象函数来获取匹配表达式。
+匹配对象方法 	描述
+group(num=0) 	匹配的整个表达式的字符串，group() 可以一次输入多个组号，在这种情况下它将返回一个包含那些组所对应值的元组。
+groups() 	返回一个包含所有小组字符串的元组，从 1 到 所含的小组号。
+
+实例 1：
+
+#!/usr/bin/python
+# -*- coding: UTF-8 -*- 
+
+import re
+print(re.match('www', 'www.runoob.com').span())  # 在起始位置匹配
+print(re.match('com', 'www.runoob.com'))         # 不在起始位置匹配
+
+以上实例运行输出结果为：
+
+(0, 3)
+None
+
+实例 2：
+
+#!/usr/bin/python
+import re
+line = "Cats are smarter than dogs"
+matchObj = re.match( r'(.*) are (.*?) .*', line, re.M|re.I)
+if matchObj:
+   print "matchObj.group() : ", matchObj.group()
+   print "matchObj.group(1) : ", matchObj.group(1)
+   print "matchObj.group(2) : ", matchObj.group(2)
+else:
+   print "No match!!"
+
+以上实例执行结果如下：
+
+matchObj.group() :  Cats are smarter than dogs
+matchObj.group(1) :  Cats
+matchObj.group(2) :  smarter
+
+re.search方法
+
+re.search 扫描整个字符串并返回第一个成功的匹配。
+
+函数语法：
+
+re.search(pattern, string, flags=0)
+
+函数参数说明：
+参数 	描述
+pattern 	匹配的正则表达式
+string 	要匹配的字符串。
+flags 	标志位，用于控制正则表达式的匹配方式，如：是否区分大小写，多行匹配等等。
+
+匹配成功re.search方法返回一个匹配的对象，否则返回None。
+
+我们可以使用group(num) 或 groups() 匹配对象函数来获取匹配表达式。
+匹配对象方法 	描述
+group(num=0) 	匹配的整个表达式的字符串，group() 可以一次输入多个组号，在这种情况下它将返回一个包含那些组所对应值的元组。
+groups() 	返回一个包含所有小组字符串的元组，从 1 到 所含的小组号。
+
+实例 1：
+
+#!/usr/bin/python
+# -*- coding: UTF-8 -*- 
+
+import re
+print(re.search('www', 'www.runoob.com').span())  # 在起始位置匹配
+print(re.search('com', 'www.runoob.com').span())         # 不在起始位置匹配
+
+以上实例运行输出结果为：
+
+(0, 3)
+(11, 14)
+
+实例 2：
+
+#!/usr/bin/python
+import re
+line = "Cats are smarter than dogs";
+searchObj = re.search( r'(.*) are (.*?) .*', line, re.M|re.I)
+if searchObj:
+   print "searchObj.group() : ", searchObj.group()
+   print "searchObj.group(1) : ", searchObj.group(1)
+   print "searchObj.group(2) : ", searchObj.group(2)
+else:
+   print "Nothing found!!"
+
+以上实例执行结果如下：
+
+searchObj.group() :  Cats are smarter than dogs
+searchObj.group(1) :  Cats
+searchObj.group(2) :  smarter
+
+re.match与re.search的区别
+
+re.match只匹配字符串的开始，如果字符串开始不符合正则表达式，则匹配失败，函数返回None；而re.search匹配整个字符串，直到找到一个匹配。
+
+实例：
+
+#!/usr/bin/python
+import re
+line = "Cats are smarter than dogs";
+matchObj = re.match( r'dogs', line, re.M|re.I)
+if matchObj:
+   print "match --> matchObj.group() : ", matchObj.group()
+else:
+   print "No match!!"
+
+matchObj = re.search( r'dogs', line, re.M|re.I)
+if matchObj:
+   print "search --> matchObj.group() : ", matchObj.group()
+else:
+   print "No match!!"
+
+以上实例运行结果如下：
+
+No match!!
+search --> matchObj.group() :  dogs
+
+re.sub(pattern, repl, string[, count])
+
+使用repl替换string中每一个匹配的子串后返回替换后的字符串。
+当repl是一个字符串时，可以使用\id或\g、\g引用分组，但不能使用编号0。
+当repl是一个方法时，这个方法应当只接受一个参数（Match对象），并返回一个字符串用于替换（返回的字符串中不能再引用分组）。
+count用于指定最多替换次数，不指定时全部替换。
+
+
+[python] view plain copy
+ 
+
+    >>> import re  
+    >>> re.search('[abc]', 'Mark')     
+    <_sre.SRE_Match object at 0x001C1FA8>  
+    >>> re.sub('[abc]', 'o', 'Mark')   
+    'Mork'  
+    >>> re.sub('[abc]', 'o', 'rock')   
+    'rook'  
+    >>> re.sub('[abc]', 'o', 'caps')   
+    'oops'  
+
+
+Python
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+	
+import re
+ 
+pattern = re.compile(r'(\w+) (\w+)')
+s = 'i say, hello world!' 
+print re.sub(pattern,r'\2 \1', s) 
+def func(m):
+    return m.group(1).title() + ' ' + m.group(2).title() 
+print re.sub(pattern,func, s) 
+### output ###
+# say i, world hello!
+# I Say, Hello World!
+
+re.subn(pattern, repl, string[, count])
+
+返回 (sub(repl, string[, count]), 替换次数)。
+Python
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+	
+
+
+importre
+
+
+ 
+
+
+pattern=re.compile(r'(\w+)
+ (\w+)')
+
+
+s='i
+ say, hello world!' 
+
+
+printre.subn(pattern,r'\2
+ \1',s) 
+
+
+deffunc(m):
+
+
+    returnm.group(1).title()+'
+ '+m.group(2).title() 
+
+
+printre.subn(pattern,func,s) 
+
+
+###output###
+
+
+#('say
+ i, world hello!', 2)
+
+
+#('I
+ Say, Hello World!', 2)
+
+re.split(pattern, string[, maxsplit])
+按照能够匹配的子串将string分割后返回列表。maxsplit用于指定最大分割次数，不指定将全部分割。我们通过下面的例子感受一下。
+Python
+1
+2
+3
+4
+5
+6
+7
+	
+import re
+pattern = re.compile(r'\d+')
+print re.split(pattern,'one1two2three3four4')
+###输出###
+#['one', 'two', 'three', 'four', '']
+
+re.findall(pattern, string[, flags])
+
+搜索string，以列表形式返回全部能匹配的子串。我们通过这个例子来感受一下
+Python
+1
+2
+3
+4
+5
+6
+7
+	
+
+
+importre
+
+
+ 
+
+
+pattern=re.compile(r'\d+')
+
+
+printre.findall(pattern,'one1two2three3four4') 
+
+
+###
+ 输出 ###
+
+
+#
+ ['1', '2', '3', '4']
+
+re.finditer(pattern, string[, flags])
+
+搜索string，返回一个顺序访问每一个匹配结果（Match对象）的迭代器。我们通过下面的例子来感受一下
+Python
+
+1
+2
+3
+4
+5
+6
+7
+8
+	
+
+
+importre
+
+
+ 
+
+
+pattern=re.compile(r'\d+')
+
+
+forminre.finditer(pattern,'one1two2three3four4'):
+
+
+    printm.group(), 
+
+
+###
+ 输出 ###
+
+
+#
+ 1 2 3 4
+
+
+re.compile(pattern, flags=0) 
+
+编译正则表达式，返回RegexObject对象，然后可以通过RegexObject对象调用match()和search()方法。 
+
+prog = re.compile(pattern)
+
+result = prog.match(string)
+
+跟
+
+result = re.match(pattern, string)
+
+是等价的。 
+
+第一种方式能实现正则表达式的重用。
+re.escape(string) 
+
+对字符串中的非字母数字进行转义 
+re.purge() 
+
+清空缓存中的正则表达式
+
+补充内容：
+
+        正则表达式使用反斜杠" \ "来代表特殊形式或用作转义字符，这里跟Python的语法冲突，因此，Python用" \\\\ "表示正则表达式中的" \ "，因为正则表达式中如果要匹配" \ "，需要用\来转义，变成" \\ "，而Python语法中又需要对字符串中每一个\进行转义，所以就变成了" \\\\ "。
+
+        上面的写法是不是觉得很麻烦，为了使正则表达式具有更好的可读性，Python特别设计了原始字符串(raw string)，需要提醒你的是，在写文件路径的时候就不要使用raw string了，这里存在陷阱。raw string就是用'r'作为字符串的前缀，如 r"\n"：表示两个字符"\"和"n"，而不是换行符了。Python中写正则表达式时推荐使用这种形式。
+
+        绝大多数正则表达式操作与 模块级函数或RegexObject方法 一样都能达到同样的目的。而且不需要你一开始就编译正则表达式对象，但是不能使用一些实用的微调参数。
+编译标志
+
+编译标志让你可以修改正则表达式的一些运行方式。在 re 模块中标志可以使用两个名字，一个是全名如 IGNORECASE，一个是缩写，一字母形式如 I。（如果你熟悉 Perl 的模式修改，一字母形式使用同样的字母；例如 re.VERBOSE的缩写形式是 re.X。）多个标志可以通过按位 OR-ing 它们来指定。如 re.I | re.M 被设置成 I 和 M 标志：
+
+I 
+IGNORECASE
+
+使匹配对大小写不敏感；字符类和字符串匹配字母时忽略大小写。举个例子，[A-Z]也可以匹配小写字母，Spam 可以匹配 "Spam", "spam", 或 "spAM"。这个小写字母并不考虑当前位置。
+
+L 
+LOCALE
+
+影响 "w, "W, "b, 和 "B，这取决于当前的本地化设置。
+
+locales 是 C 语言库中的一项功能，是用来为需要考虑不同语言的编程提供帮助的。举个例子，如果你正在处理法文文本，你想用 "w+ 来匹配文字，但 "w 只匹配字符类 [A-Za-z]；它并不能匹配 "é" 或 "?"。如果你的系统配置适当且本地化设置为法语，那么内部的 C 函数将告诉程序 "é" 也应该被认为是一个字母。当在编译正则表达式时使用 LOCALE 标志会得到用这些 C 函数来处理 "w 後的编译对象；这会更慢，但也会象你希望的那样可以用 "w+ 来匹配法文文本。
+
+M 
+MULTILINE
+
+(此时 ^ 和 $ 不会被解释; 它们将在 4.1 节被介绍.)
+
+使用 "^" 只匹配字符串的开始，而 $ 则只匹配字符串的结尾和直接在换行前（如果有的话）的字符串结尾。当本标志指定後， "^" 匹配字符串的开始和字符串中每行的开始。同样的， $ 元字符匹配字符串结尾和字符串中每行的结尾（直接在每个换行之前）。
+
+S 
+DOTALL
+
+使 "." 特殊字符完全匹配任何字符，包括换行；没有这个标志， "." 匹配除了换行外的任何字符。
+
+X 
+VERBOSE
+
+该标志通过给予你更灵活的格式以便你将正则表达式写得更易于理解。当该标志被指定时，在 RE 字符串中的空白符被忽略，除非该空白符在字符类中或在反斜杠之後；这可以让你更清晰地组织和缩进 RE。它也可以允许你将注释写入 RE，这些注释会被引擎忽略；注释用 "#"号 来标识，不过该符号不能在字符串或反斜杠之後。
+
+
+六、pyquery
+初始化
+
+初始化的时候一般有三种传入方式：传入字符串，传入url,传入文件
+
+字符串初始化
+复制代码
+
+html = '''
+<div>
+    <ul>
+         <li class="item-0">first item</li>
+         <li class="item-1"><a href="link2.html">second item</a></li>
+         <li class="item-0 active"><a href="link3.html"><span class="bold">third item</span></a></li>
+         <li class="item-1 active"><a href="link4.html">fourth item</a></li>
+         <li class="item-0"><a href="link5.html">fifth item</a></li>
+     </ul>
+</div>
+'''
+
+from pyquery import PyQuery as pq
+doc = pq(html)
+print(doc)
+print(type(doc))
+print(doc('li'))
+
+复制代码
+
+结果如下：
+
+由于PyQuery写起来比较麻烦，所以我们导入的时候都会添加别名：
+from pyquery import PyQuery as pq
+
+这里我们可以知道上述代码中的doc其实就是一个pyquery对象，我们可以通过doc可以进行元素的选择，其实这里就是一个css选择器，所以CSS选择器的规则都可以用，直接doc(标签名)就可以获取所有的该标签的内容，如果想要获取class 则doc('.class_name'),如果是id则doc('#id_name')....
+
+URL初始化
+
+from pyquery import PyQuery as pq
+
+doc = pq(url="http://www.baidu.com",encoding='utf-8')
+print(doc('head'))
+
+文件初始化
+
+我们在pq()这里可以传入url参数也可以传入文件参数，当然这里的文件通常是一个html文件，例如：pq(filename='index.html')
+基本的CSS选择器
+复制代码
+
+html = '''
+<div id="container">
+    <ul class="list">
+         <li class="item-0">first item</li>
+         <li class="item-1"><a href="link2.html">second item</a></li>
+         <li class="item-0 active"><a href="link3.html"><span class="bold">third item</span></a></li>
+         <li class="item-1 active"><a href="link4.html">fourth item</a></li>
+         <li class="item-0"><a href="link5.html">fifth item</a></li>
+     </ul>
+ </div>
+'''
+from pyquery import PyQuery as pq
+doc = pq(html)
+print(doc('#container .list li'))
+
+复制代码
+
+这里我们需要注意的一个地方是doc('#container .list li')，这里的三者之间的并不是必须要挨着，只要是层级关系就可以,下面是常用的CSS选择器方法：
+
+查找元素
+
+子元素
+children,find
+代码例子：
+复制代码
+
+html = '''
+<div id="container">
+    <ul class="list">
+         <li class="item-0">first item</li>
+         <li class="item-1"><a href="link2.html">second item</a></li>
+         <li class="item-0 active"><a href="link3.html"><span class="bold">third item</span></a></li>
+         <li class="item-1 active"><a href="link4.html">fourth item</a></li>
+         <li class="item-0"><a href="link5.html">fifth item</a></li>
+     </ul>
+ </div>
+'''
+from pyquery import PyQuery as pq
+doc = pq(html)
+items = doc('.list')
+print(type(items))
+print(items)
+lis = items.find('li')
+print(type(lis))
+print(lis)
+
+复制代码
+
+运行结果如下
+
+从结果里我们也可以看出通过pyquery找到结果其实还是一个pyquery对象，可以继续查找，上述中的代码中的items.find('li') 则表示查找ul里的所有的li标签
+当然这里通过children可以实现同样的效果,并且通过.children方法得到的结果也是一个pyquery对象
+
+li = items.children()
+print(type(li))
+print(li)
+
+同时在children里也可以用CSS选择器
+
+li2 = items.children('.active') print(li2)
+
+父元素
+parent,parents方法
+
+通过.parent就可以找到父元素的内容，例子如下：
+复制代码
+
+html = '''
+<div id="container">
+    <ul class="list">
+         <li class="item-0">first item</li>
+         <li class="item-1"><a href="link2.html">second item</a></li>
+         <li class="item-0 active"><a href="link3.html"><span class="bold">third item</span></a></li>
+         <li class="item-1 active"><a href="link4.html">fourth item</a></li>
+         <li class="item-0"><a href="link5.html">fifth item</a></li>
+     </ul>
+ </div>
+'''
+from pyquery import PyQuery as pq
+doc = pq(html)
+items = doc('.list')
+container = items.parent()
+print(type(container))
+print(container)
+
+复制代码
+
+通过.parents就可以找到祖先节点的内容，例子如下：
+复制代码
+
+html = '''
+<div class="wrap">
+    <div id="container">
+        <ul class="list">
+             <li class="item-0">first item</li>
+             <li class="item-1"><a href="link2.html">second item</a></li>
+             <li class="item-0 active"><a href="link3.html"><span class="bold">third item</span></a></li>
+             <li class="item-1 active"><a href="link4.html">fourth item</a></li>
+             <li class="item-0"><a href="link5.html">fifth item</a></li>
+         </ul>
+     </div>
+ </div>
+'''
+from pyquery import PyQuery as pq
+doc = pq(html)
+items = doc('.list')
+parents = items.parents()
+print(type(parents))
+print(parents)
+
+复制代码
+
+结果如下：从结果我们可以看出返回了两部分内容，一个是的父节点的信息，一个是父节点的父节点的信息即祖先节点的信息
+
+同样我们通过.parents查找的时候也可以添加css选择器来进行内容的筛选
+
+兄弟元素
+siblings
+复制代码
+
+html = '''
+<div class="wrap">
+    <div id="container">
+        <ul class="list">
+             <li class="item-0">first item</li>
+             <li class="item-1"><a href="link2.html">second item</a></li>
+             <li class="item-0 active"><a href="link3.html"><span class="bold">third item</span></a></li>
+             <li class="item-1 active"><a href="link4.html">fourth item</a></li>
+             <li class="item-0"><a href="link5.html">fifth item</a></li>
+         </ul>
+     </div>
+ </div>
+'''
+from pyquery import PyQuery as pq
+doc = pq(html)
+li = doc('.list .item-0.active')
+print(li.siblings())
+
+复制代码
+
+代码中doc('.list .item-0.active') 中的.tem-0和.active是紧挨着的，所以表示是并的关系，这样满足条件的就剩下一个了：thired item的那个标签了
+这样在通过.siblings就可以获取所有的兄弟标签，当然这里是不包括自己的
+同样的在.siblings()里也是可以通过CSS选择器进行筛选
+遍历
+
+单个元素
+复制代码
+
+html = '''
+<div class="wrap">
+    <div id="container">
+        <ul class="list">
+             <li class="item-0">first item</li>
+             <li class="item-1"><a href="link2.html">second item</a></li>
+             <li class="item-0 active"><a href="link3.html"><span class="bold">third item</span></a></li>
+             <li class="item-1 active"><a href="link4.html">fourth item</a></li>
+             <li class="item-0"><a href="link5.html">fifth item</a></li>
+         </ul>
+     </div>
+</div>
+'''
+from pyquery import PyQuery as pq
+doc = pq(html)
+li = doc('.item-0.active')
+print(li)
+
+lis = doc('li').items()
+print(type(lis))
+for li in lis:
+    print(type(li))
+    print(li)
+
+复制代码
+
+运行结果如下：从结果中我们可以看出通过items()可以得到一个生成器，并且我们通过for循环得到的每个元素依然是一个pyquery对象。
+
+获取信息
+
+获取属性
+pyquery对象.attr(属性名)
+pyquery对象.attr.属性名
+复制代码
+
+html = '''
+<div class="wrap">
+    <div id="container">
+        <ul class="list">
+             <li class="item-0">first item</li>
+             <li class="item-1"><a href="link2.html">second item</a></li>
+             <li class="item-0 active"><a href="link3.html"><span class="bold">third item</span></a></li>
+             <li class="item-1 active"><a href="link4.html">fourth item</a></li>
+             <li class="item-0"><a href="link5.html">fifth item</a></li>
+         </ul>
+     </div>
+ </div>
+'''
+from pyquery import PyQuery as pq
+doc = pq(html)
+a = doc('.item-0.active a')
+print(a)
+print(a.attr('href'))
+print(a.attr.href)
+
+复制代码
+
+所以这里我们也可以知道获得属性值的时候可以直接a.attr(属性名)或者a.attr.属性名
+
+获取文本
+在很多时候我们是需要获取被html标签包含的文本信息,通过.text()就可以获取文本信息
+复制代码
+
+html = '''
+<div class="wrap">
+    <div id="container">
+        <ul class="list">
+             <li class="item-0">first item</li>
+             <li class="item-1"><a href="link2.html">second item</a></li>
+             <li class="item-0 active"><a href="link3.html"><span class="bold">third item</span></a></li>
+             <li class="item-1 active"><a href="link4.html">fourth item</a></li>
+             <li class="item-0"><a href="link5.html">fifth item</a></li>
+         </ul>
+     </div>
+ </div>
+'''
+from pyquery import PyQuery as pq
+doc = pq(html)
+a = doc('.item-0.active a')
+print(a)
+print(a.text())
+
+复制代码
+
+结果如下：
+
+获取html
+我们通过.html()的方式可以获取当前标签所包含的html信息，例子如下：
+复制代码
+
+html = '''
+<div class="wrap">
+    <div id="container">
+        <ul class="list">
+             <li class="item-0">first item</li>
+             <li class="item-1"><a href="link2.html">second item</a></li>
+             <li class="item-0 active"><a href="link3.html"><span class="bold">third item</span></a></li>
+             <li class="item-1 active"><a href="link4.html">fourth item</a></li>
+             <li class="item-0"><a href="link5.html">fifth item</a></li>
+         </ul>
+     </div>
+ </div>
+'''
+from pyquery import PyQuery as pq
+doc = pq(html)
+li = doc('.item-0.active')
+print(li)
+print(li.html())
+
+复制代码
+
+结果如下：
+
+DOM操作
+
+addClass、removeClass
+熟悉前端操作的话，通过这两个操作可以添加和删除属性
+复制代码
+
+html = '''
+<div class="wrap">
+    <div id="container">
+        <ul class="list">
+             <li class="item-0">first item</li>
+             <li class="item-1"><a href="link2.html">second item</a></li>
+             <li class="item-0 active"><a href="link3.html"><span class="bold">third item</span></a></li>
+             <li class="item-1 active"><a href="link4.html">fourth item</a></li>
+             <li class="item-0"><a href="link5.html">fifth item</a></li>
+         </ul>
+     </div>
+ </div>
+'''
+from pyquery import PyQuery as pq
+doc = pq(html)
+li = doc('.item-0.active')
+print(li)
+li.removeClass('active')
+print(li)
+li.addClass('active')
+print(li)
+
+复制代码
+
+attr,css
+同样的我们可以通过attr给标签添加和修改属性，
+如果之前没有该属性则是添加，如果有则是修改
+我们也可以通过css添加一些css属性，这个时候，标签的属性里会多一个style属性
+复制代码
+
+html = '''
+<div class="wrap">
+    <div id="container">
+        <ul class="list">
+             <li class="item-0">first item</li>
+             <li class="item-1"><a href="link2.html">second item</a></li>
+             <li class="item-0 active"><a href="link3.html"><span class="bold">third item</span></a></li>
+             <li class="item-1 active"><a href="link4.html">fourth item</a></li>
+             <li class="item-0"><a href="link5.html">fifth item</a></li>
+         </ul>
+     </div>
+ </div>
+'''
+from pyquery import PyQuery as pq
+doc = pq(html)
+li = doc('.item-0.active')
+print(li)
+li.attr('name', 'link')
+print(li)
+li.css('font-size', '14px')
+print(li)
+
+复制代码
+
+结果如下：
+
+ 
+
+remove
+有时候我们获取文本信息的时候可能并列的会有一些其他标签干扰，这个时候通过remove就可以将无用的或者干扰的标签直接删除，从而方便操作
+复制代码
+
+html = '''
+<div class="wrap">
+    Hello, World
+    <p>This is a paragraph.</p>
+ </div>
+'''
+from pyquery import PyQuery as pq
+doc = pq(html)
+wrap = doc('.wrap')
+print(wrap.text())
+wrap.find('p').remove()
+print(wrap.text())
+
+复制代码
+
+
+
+
+七、xpath与css选择器比较
+1. CSS locator比XPath locator速度快，特别是在IE下面（IE没有自己的XPath 解析器(Parser)）
+
+2. 对于文本的处理xpath更强大使用, text()匹配的是显示文本信息。
+
+String locator_Xpath = "//*[contains(text(),'test')]";
+
+　　但需要注意的是text()获取的是当前元素的文本，不包括其子元素的文本。如下代码text()得到的结果是"Please click here"。但如果使用$("#id1").text()获取的是"Memo Please click here",使用selenium获取元素text也是"Memo Please click here"。
+
+<div id="id1">
+    <span>Memo<span>
+    Please click here
+</div>
+
+ 
+
+3. 对于class属性Css能直接匹配部分，而Xpath对于class跟普通属性一致，使用字符串精确匹配，需要使用contains()函数才能匹配部分字符串
+复制代码
+
+<div class="class1 popup js-dragable alert-msg">
+    <div class ="class2 submit-box ">
+            <input class ="class3"/>            
+    </div>
+</div>
+
+String locator_Xpath="//div[@class='class1 popup js-dragable alert-msg']//input[@class='class3']";
+String locator_Xpath="//div[contains(@class,'popup js-dragable alert-msg')]//input[@class='class3']";
+String locator_Css = ".class1.js-dragable .class3"
+
+复制代码
+
+ 
+
+ 4. 使用祖先元素属性与当前元素属性组合处理时
+复制代码
+
+<div class="111">
+    <div>
+        <div>
+            <input class = "222"/>
+        </div>
+    </div>
+    
+</div>
+
+String locator_xpath="//div[@class='111'/*/*/*[@class='222']]";
+String locator_xpath="//div[@class='111'//[@class='222']]"
+String locator_css = ".111 .222";    
+
+复制代码
+
+ *注意两个class之间有一个空格表示层级关系，且空格选择所有层级的子元素，而>只选择一代
+
+ 
+
+5.模糊匹配
+  	XPath 	Css
+选取属性值中的部分string匹配 	//span[contains(@class,'popup-btn js-dragable')] 	span[title*='456']
+  	//input[starts-with(@name,'name1')] 	input[name^='name1']
+  	//input[ends-with(@name,'name1')] 	input[name$='name1']
+  	  	 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+6.多个属性匹配
+
+    xpath=//a[@class='name' and value='123']
+
+    css = a[.name][value='123']
+
+ 
+
+7. 第n个子元素的选择
+复制代码
+
+<div class="category_depth_1 bnr">
+    <li><a href="/estore/kr/zh/c/1" class="on">护肤</a></li>
+    <li><a href="/estore/kr/zh/c/1" class="on">家电</a></li>
+    <li><a href="/estore/kr/zh/c/1" class="on">美妆</a></li>
+    <li><a href="/estore/kr/zh/c/1" class="on">母婴</a></li>
+    <li><a href="/estore/kr/zh/c/1" class="on">电子产品</a></li>
+</div>
+
+String locator_Xpath = "//*[@class="category_depth_1 bnr"]//li[1]"
+String locator_Css = ".category_depth_1.bnr li:first-child"
+String locator_Css = ".category_depth_1.bnr li:last-child"
+String locator_Css = ".category_depth_1.bnr li:nth-child(1)"
+#index都是从1开始
+
+以上元素如果选择点击li元素有可能点击不生效而选择点击a标签，这个时候需要注意index还是要标在li标签后面
+String locator_Xpath = "//*[@class="category_depth_1 bnr"]//li[1]/a"
+String locator_Css = ".category_depth_1.bnr li:first-child a"
+String locator_Css = ".category_depth_1.bnr li:last-child>a"
+String locator_Css = ".category_depth_1.bnr li:nth-child(1)>a"
+
+复制代码
+
+ 
+
+8. 拥有某个属性的元素
+
+　　xpath= //*[@title]
+
+　　css= *[title]
+
+9. 拥有子元素a的P元素
+
+　　xpath= //div[a]
+
+　　css 不能实现
+
+10. 匹配祖先元素
+
+　　xpath= div[@id="id1"]//ancestor::tr//td
+
+　　css 不能实现
+
+ 11. 查找兄弟元素， Css只能查找元素后面的元素，不能向前找
+
+　　xpath= //div[@class="class1"]//preceding-sibling::div[1]
+
+　　xpath= //div[@class="class1"]//follow-sibling::div[1]
+
+　　css= div.class1+div
+
+12. 查找不包含not，以不包含display: none为例
+
+　　xpath= //div[@class="name" and not(contains(@style,"display: none"))]
+
+　　css= div.name:not([style*='display: none'])
+  
+  
+  
+  八、scrapy常用xpath
+  1. 元素的多级定位与跳级定位
+
+    多级定位：依靠html中的多级元素逐步缩小范围
+
+response.xpath('//table/tbody/tr/td')
+
+//如果知道元素所属的下标可以用下标选择
+response.xpath('//table/tbody/tr[1]/td')
+
+    1
+    2
+    3
+    4
+
+    跳级定位：符号“//”表示跳级定位，即对当前元素的所有层数的子元素（不仅是第一层子元素）进行查找，一般xpath的开头都是跳级定位
+
+response.xpath('//span//table')
+
+    1
+
+2. 依靠元素的属性定位
+
+每个html元素都有很多属性，如id、class、title、href、text(href和text往往可以配合正则表达式）等，这些属性往往具有很强的特殊性，结合元素多级定位或跳级定位会更准确高效，下面举几个典型的例子，其他的举一反三
+
+    利用class定位
+
+response.xpath('//td[@class="mc_content"]')
+
+    1
+
+    利用href配合正则表达式定位
+
+response.xpath('//a[re:test(@href,"^\/index\.php\?m=News&a=details&id=1&NewsId=\d{1,4}")]')
+
+    1
+
+    利用text结合正则表达式定位
+
+a=response.xpath('//a[re:test(text(),"\w{4}")]')
+
+    1
+
+此外，xpath还有对于html元素操作的两个实用的函数（可以用正则表达式代替）——starts-with和contains；
+
+a=response.xpath('//a[starts-with(@title,"注册时间")]')
+
+a=response.xpath('//a[contains(text(),"闻")]')
+
+    1
+    2
+    3
+
+3. 提取元素或元素的属性值
+
+    首先是最基本的extract()函数，提取被定为的元素对象
+
+a=response.xpath('//a[contains(text(),"闻")]').extract()
+
+//如果被定为的元素对象有多个，可以有用下标指定
+a=response.xpath('//a[contains(text(),"闻")]').extract()[1]
+
+    1
+    2
+    3
+    4
+
+    提取元素的属性
+
+//提取text
+a=response.xpath('//a[contains(text(),"闻")]/text()').extract()
+
+//获取href
+a=response.xpath('//a[contains(text(),"闻")]/@href').extract()
+
+//获取name
+a=response.xpath('//a[contains(text(),"闻")]/@name').extract()
+
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+
+此时我们的正则表达式又闲不住了（scrapy自带的函数），可以对提取的元素进行选择
+
+//对href中的部分字符串进行选择
+response.xpath('//a[@name="_l_p_n"]/@href').re('\/s.*?list\.htm')
+
+    1
+    2
+
+在这里关于xpath的所有用法基本总结完毕，只是由于xpath是对静态元素进行匹配选择，对于javascript往往束手无策，这时不得不用一个自动化测试工具——selenium，可以实现各种动态事件和静态元素的选择，只是selenium往往比较吃内存，响应时间也比较慢，对于大型的爬虫任务尽量不要使用，毕竟有一些javascript元素是内嵌在网页代码中的，这时候结合万能的正则表达式，xpath往往能够实现。如下：
+
+link = re.search("javascript:goToPage\('(.*?)'", value) //value为包含该段的字符串
+
+
+九

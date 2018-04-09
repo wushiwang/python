@@ -2038,4 +2038,1323 @@ response.xpath('//a[@name="_l_p_n"]/@href').re('\/s.*?list\.htm')
 link = re.search("javascript:goToPage\('(.*?)'", value) //value为包含该段的字符串
 
 
-九
+九.selector构造选择器
+构造选择器
+
+Scrapy selector 是以 文字（Text）或 TextResponse 构造的 Selector。其根据输入类型自动选择最优的分析方法（XML vs HTML）：
+
+>>> from scrapy.selector import Selector
+>>> from scrapy.http import HtmlResponse
+
+以文字构造：
+
+>>> body = '<html><body><span>good</span></body></html>'
+>>> Selector(text=body).xpath('//span/text()').extract()
+[u'good']
+
+以 response 构造：
+
+>>> response = HtmlResponse(url='http://example.com', body=body)
+>>> Selector(response=response).xpath('//span/text()').extract()
+[u'good']
+
+为了方便起见，response 对象以 .selector 属性提供了一个 selector：
+
+>>> response.selector.xpath('//span/text()').extract()
+[u'good']
+
+使用选择器
+
+ 使用 Scrapy Shell 和 Scrapy 文档服务器的一个样例页面，来解释如何使用选择器：
+
+http://doc.scrapy.org/en/latest/_static/selectors-sample1.html
+复制代码
+
+<html>
+ <head>
+  <base href='http://example.com/' />
+  <title>Example website</title>
+ </head>
+ <body>
+  <div id='images'>
+   <a href='image1.html'>Name: My image 1 <br /><img src='image1_thumb.jpg' /></a>
+   <a href='image2.html'>Name: My image 2 <br /><img src='image2_thumb.jpg' /></a>
+   <a href='image3.html'>Name: My image 3 <br /><img src='image3_thumb.jpg' /></a>
+   <a href='image4.html'>Name: My image 4 <br /><img src='image4_thumb.jpg' /></a>
+   <a href='image5.html'>Name: My image 5 <br /><img src='image5_thumb.jpg' /></a>
+  </div>
+ </body>
+</html>
+
+复制代码
+
+首先打开 Shell：
+
+scrapy shell http://doc.scrapy.org/en/latest/_static/selectors-sample1.html
+
+当 shell 载入后，将获得名为 response 的 shell 变量，其为响应的 response，并且在其 response.selector 属性上绑定了一个 selector。
+
+因为处理的是 HTML，选择器自动使用 HTML 语法分析。
+
+那么，通过查看 HTML code 该页面的源码，可以构建一个 XPath 来选择 title 标签内的文字：
+
+>>> response.selector.xpath('//title/text()')
+[<Selector (text) xpath=//title/text()>]
+
+由于在 response 中使用 XPath、CSS 查询十分普遍，因此，Scrapy 提供了两个实用的快捷方式：
+
+response.xpath()
+
+response.css()
+
+>>> response.xpath('//title/text()')
+[<Selector (text) xpath=//title/text()>]
+>>> response.css('title::text')
+[<Selector (text) xpath=//title/text()>]
+
+.xpath() 以及 .css() 方法返回一个类 SelectList 的实例，它是一个新选择器的列表。这个 API 可以用来快速的提取嵌套数据。
+
+为了提取真实的原文数据，需要调用 .extract() 方法如下：
+
+>>> response.xpath('//title/text()').extract()
+[u'Example website']
+
+CSS 选择器可以使用 CSS3 伪元素（pseudo-elements）来选择文字或者属性节点：
+
+>>> response.css('title::text').extract()
+[u'Example website']
+
+获取得到根 URL（base URL）和一些图片链接：
+复制代码
+
+>>> response.xpath('//base/@href').extract()
+[u'http://example.com/']
+
+>>> response.css('base::attr(href)').extract()
+[u'http://example.com/']
+
+>>> response.xpath('//a[contains(@href, "image")]/@href').extract()
+[u'image1.html',
+ u'image2.html',
+ u'image3.html',
+ u'image4.html',
+ u'image5.html']
+
+>>> response.css('a[href*=image]::attr(href)').extract()
+[u'image1.html',
+ u'image2.html',
+ u'image3.html',
+ u'image4.html',
+ u'image5.html']
+
+>>> response.xpath('//a[contains(@href, "image")]/img/@src').extract()
+[u'image1_thumb.jpg',
+ u'image2_thumb.jpg',
+ u'image3_thumb.jpg',
+ u'image4_thumb.jpg',
+ u'image5_thumb.jpg']
+
+>>> response.css('a[href*=image] img::attr(src)').extract()
+[u'image1_thumb.jpg',
+ u'image2_thumb.jpg',
+ u'image3_thumb.jpg',
+ u'image4_thumb.jpg',
+ u'image5_thumb.jpg']
+
+复制代码
+嵌套选择器
+
+选择器方法（.xpath() or css()）返回相同类型的选择器列表，因此也可以对这些选择器调用选择器方法：
+复制代码
+
+>>> links = response.xpath('//a[contains(@href, "image")]')
+>>> links.extract()
+[u'<a href="image1.html">Name: My image 1 <br><img src="image1_thumb.jpg"></a>',
+ u'<a href="image2.html">Name: My image 2 <br><img src="image2_thumb.jpg"></a>',
+ u'<a href="image3.html">Name: My image 3 <br><img src="image3_thumb.jpg"></a>',
+ u'<a href="image4.html">Name: My image 4 <br><img src="image4_thumb.jpg"></a>',
+ u'<a href="image5.html">Name: My image 5 <br><img src="image5_thumb.jpg"></a>']
+
+>>> for index, link in enumerate(links):
+        args = (index, link.xpath('@href').extract(), link.xpath('img/@src').extract())
+        print 'Link number %d points to url %s and image %s' % args
+
+Link number 0 points to url [u'image1.html'] and image [u'image1_thumb.jpg']
+Link number 1 points to url [u'image2.html'] and image [u'image2_thumb.jpg']
+Link number 2 points to url [u'image3.html'] and image [u'image3_thumb.jpg']
+Link number 3 points to url [u'image4.html'] and image [u'image4_thumb.jpg']
+Link number 4 points to url [u'image5.html'] and image [u'image5_thumb.jpg']
+
+复制代码
+结合正则表达式使用选择器
+
+Selector 也有一个 .re() 方法，用来通过正则表达式来提取数据。然而，不同于使用 .xpath() 或者 .css() 方法，.re() 方法返回 Unicode 字符串的列表。所以无法构造嵌套式的 .re() 调用。
+复制代码
+
+>>> response.xpath('//a[contains(@href, "image")]/text()').re(r'Name:\s*(.*)')
+[u'My image 1',
+ u'My image 2',
+ u'My image 3',
+ u'My image 4',
+ u'My image 5']
+
+复制代码
+使用相对 XPaths
+
+如果使用嵌套的选择器，并且使用起始为 / 的 XPath, 那么该 XPath 将对文档使用绝对路径，而且对于你调用的 Selector 不是相对路径。
+
+比如，假设要提取 <div> 元素中所有的 <p> 元素。首先，先得到所有的 <div> 元素：
+
+>>> divs = response.xpath('//div')
+
+开始时，你也许会尝试使用下面的错误的方法，因为它其实是从整篇文档中，而不是仅仅从那些 <div> 元素内部提取所有的 <p> 元素：
+
+>>> for p in divs.xpath('//p'):  # this is wrong - gets all <p> from the whole document
+...     print p.extract()
+
+下面是比较适合的处理方法（注意 .//p XPath的点前缀）：
+
+>>> for p in divs.xpath('.//p'):  # extracts all <p> inside
+...     print p.extract()
+
+另一种常见的情况是提取所有直系的 <p> 元素：
+
+>>> for p in divs.xpath('p'):
+...     print p.extract()
+
+使用 EXSLT 扩展
+
+因建于 lxml 之上，Scrapy 选择器也支持一些 EXSLT 扩展，可以在 XPath 表达式中使用这些预先指定的命名空间：
+前缀 	命名空间 	用途
+re 	http://exslt.org/regular-expressions 	正则表达式
+set 	http://exslt.org/sets 	集合操作
+正则表达式
+
+例如在 XPath 的 starts-with() 或 contains() 无法满足需求时，test() 函数可以非常有用。
+
+例如在列表中选择有 “class” 元素且结尾为一个数字的链接：
+复制代码
+
+>>> from scrapy import Selector
+>>> doc = """
+... <div>
+...     <ul>
+...         <li class="item-0"><a href="link1.html">first item</a></li>
+...         <li class="item-1"><a href="link2.html">second item</a></li>
+...         <li class="item-inactive"><a href="link3.html">third item</a></li>
+...         <li class="item-1"><a href="link4.html">fourth item</a></li>
+...         <li class="item-0"><a href="link5.html">fifth item</a></li>
+...     </ul>
+... </div>
+... """
+>>> sel = Selector(text=doc, type="html")
+>>> sel.xpath('//li//@href').extract()
+[u'link1.html', u'link2.html', u'link3.html', u'link4.html', u'link5.html']
+>>> sel.xpath('//li[re:test(@class, "item-\d$")]//@href').extract()
+[u'link1.html', u'link2.html', u'link4.html', u'link5.html']
+>>>
+
+复制代码
+
+警告：C 语言库 libxslt 不支持 EXSLT 正则表达式，因此 lxml 在实现时使用了 Python re 模块的钩子。因此，在 XPath 表达式中使用 regexp 函数可能会牺牲少量的性能。
+集合操作
+
+集合操作可以方便地用于在提取文字元素前从文档树种去除一些部分。
+
+例如使用 itemscopes 组合对应的 itemprops 来提取微数据（来自 http://schema.org/Product 的样本内容）
+复制代码
+
+>>> doc = """
+... <div itemscope itemtype="http://schema.org/Product">
+...   <span itemprop="name">Kenmore White 17" Microwave</span>
+...   <img src="kenmore-microwave-17in.jpg" alt='Kenmore 17" Microwave' />
+...   <div itemprop="aggregateRating"
+...     itemscope itemtype="http://schema.org/AggregateRating">
+...    Rated <span itemprop="ratingValue">3.5</span>/5
+...    based on <span itemprop="reviewCount">11</span> customer reviews
+...   </div>
+...
+...   <div itemprop="offers" itemscope itemtype="http://schema.org/Offer">
+...     <span itemprop="price">$55.00</span>
+...     <link itemprop="availability" href="http://schema.org/InStock" />In stock
+...   </div>
+...
+...   Product description:
+...   <span itemprop="description">0.7 cubic feet countertop microwave.
+...   Has six preset cooking categories and convenience features like
+...   Add-A-Minute and Child Lock.</span>
+...
+...   Customer reviews:
+...
+...   <div itemprop="review" itemscope itemtype="http://schema.org/Review">
+...     <span itemprop="name">Not a happy camper</span> -
+...     by <span itemprop="author">Ellie</span>,
+...     <meta itemprop="datePublished" content="2011-04-01">April 1, 2011
+...     <div itemprop="reviewRating" itemscope itemtype="http://schema.org/Rating">
+...       <meta itemprop="worstRating" content = "1">
+...       <span itemprop="ratingValue">1</span>/
+...       <span itemprop="bestRating">5</span>stars
+...     </div>
+...     <span itemprop="description">The lamp burned out and now I have to replace
+...     it. </span>
+...   </div>
+...
+...   <div itemprop="review" itemscope itemtype="http://schema.org/Review">
+...     <span itemprop="name">Value purchase</span> -
+...     by <span itemprop="author">Lucas</span>,
+...     <meta itemprop="datePublished" content="2011-03-25">March 25, 2011
+...     <div itemprop="reviewRating" itemscope itemtype="http://schema.org/Rating">
+...       <meta itemprop="worstRating" content = "1"/>
+...       <span itemprop="ratingValue">4</span>/
+...       <span itemprop="bestRating">5</span>stars
+...     </div>
+...     <span itemprop="description">Great microwave for the price. It is small and
+...     fits in my apartment.</span>
+...   </div>
+...   ...
+... </div>
+... """
+>>>
+>>> for scope in sel.xpath('//div[@itemscope]'):
+...     print "current scope:", scope.xpath('@itemtype').extract()
+...     props = scope.xpath('''
+...                 set:difference(./descendant::*/@itemprop,
+...                                .//*[@itemscope]/*/@itemprop)''')
+...     print "    properties:", props.extract()
+...     print
+...
+
+current scope: [u'http://schema.org/Product']
+    properties: [u'name', u'aggregateRating', u'offers', u'description', u'review', u'review']
+
+current scope: [u'http://schema.org/AggregateRating']
+    properties: [u'ratingValue', u'reviewCount']
+
+current scope: [u'http://schema.org/Offer']
+    properties: [u'price', u'availability']
+
+current scope: [u'http://schema.org/Review']
+    properties: [u'name', u'author', u'datePublished', u'reviewRating', u'description']
+
+current scope: [u'http://schema.org/Rating']
+    properties: [u'worstRating', u'ratingValue', u'bestRating']
+
+current scope: [u'http://schema.org/Review']
+    properties: [u'name', u'author', u'datePublished', u'reviewRating', u'description']
+
+current scope: [u'http://schema.org/Rating']
+    properties: [u'worstRating', u'ratingValue', u'bestRating']
+
+>>>
+
+复制代码
+
+在这里，首先在 itemscope 元素上迭代，对于其中的每一个元素，我们寻找所有的 itemprops 元素，并排除那些身在另一个 itemscope 内的元素。
+内建选择器的参考
+class scrapy.selector.Selector(response=None, text=None, type=None)
+
+Selector 的实例时对选择某些内容响应的封装。
+
+response 是 HTMLResponse 或 XMLResponse 的一个对象，将被用来选择和提取数据。
+
+text 是在 response 不可用时的一个 unicode 字符串或 utf-8 编码的文字。将 text 和 response 一起使用时未定义行为。
+
+type 定义了选择器类型，可以是 html， xml 或 None（默认）。
+
+如果 type 是 None，选择器会根据 response 类型（参见下面）自动选择最佳类型，或者在和 text 一起使用时，默认为 html。
+
+如果 type 是None，并传递了一个 response，选择器类型将从 response 类型中推导如下：
+
+    "html" for HtmlResponse type
+    "xml" for XmlResponse type
+    "html" for anything else
+
+其他情况下，如果设定了 type ，选择器类型将被强制设定，而不进行检测。
+
+xpath(query)
+
+寻找可以匹配 xpath query 的节点，并返回一个 SelectorList 的一个实例结果，单一化其所有元素。列表元素也实现了 Selector 的接口。
+
+query 是包含 XPath 查询请求的字符串。
+
+方便起见该方法也可以通过 response.xpath() 调用。
+
+css(query)
+css(query)
+
+应用给定的 CSS 选择器，返回 SelectorList 的一个实例。
+
+query是一个包含 CSS 选择器的字符串。
+
+在后台，通过 cssselect 库和运行 .xpath() 方法，CSS 查询会被转换为 XPath 查询。
+
+方便起见该方法也可以通过 response.css() 调用。
+extract()
+
+串行化并将匹配到的节点返回一个 unicode 字符串列表。 结尾是编码内容的百分比。
+re(regex)
+
+应用给定的 regex，并返回匹配到的 unicode 字符串列表。
+
+regex可以是一个已编译的正则表达式，也可以是一个将被 re.compile(regex) 编译为正则表达式的字符串。
+register_namespace(prefix, uri)
+
+注册给定的命名空间，其将在 Selector 中使用。 不注册命名空间，你将无法从非标准命名空间中选择或提取数据。
+remove_namespaces()
+
+移除所有的命名空间，允许使用少量的命名空间 xpaths 遍历文档。参加下面的例子。
+__nonzero__()
+
+如果选择了任意的真实文档，将返回 True ，否则返回 False 。 也就是说， Selector 的布尔值是通过它选择的内容确定的。
+SelectorList 对象
+class scrapy.selector.SelectorList
+
+SelectorList 类是内建 list 类的子类，提供了一些额外的方法。
+xpath(query)
+
+对列表中的每个元素调用.xpath()方法，返回结果为另一个单一化的 SelectorList。
+
+query 和 Selector.xpath() 中的参数相同。
+css(query)
+
+对列表中的各个元素调用.css() 方法，返回结果为另一个单一化的 SelectorList。
+
+query 和 Selector.css() 中的参数相同。
+extract()
+
+对列表中的各个元素调用.extract()方法，返回结果为单一化的 unicode 字符串列表。
+re()
+
+对列表中的各个元素调用 .re() 方法，返回结果为单一化的 unicode 字符串列表。
+__nonzero__()
+
+列表非空则返回 True，否则返回 False。
+在 HTML 响应上的选择器样例
+
+这里是一些 Selector 的样例，用来说明一些概念。在所有的例子中，假设已经有一个通过 HtmlResponse 对象实例化的 Selector，如下：
+
+sel = Selector(html_response)
+
+复制代码
+
+#从 HTML 响应主体中提取所有的<h1>元素，返回:class:Selector 对象(即 SelectorList 的一个对象)的列表:
+
+sel.xpath("//h1")
+
+#从 HTML 响应主体上提取所有<h1>元素的文字，返回一个 unicode 字符串的列表:
+
+sel.xpath("//h1").extract()         # this includes the h1 tag
+sel.xpath("//h1/text()").extract()  # this excludes the h1 tag
+
+#在所有<p>标签上迭代，打印它们的类属性:
+
+for node in sel.xpath("//p"):
+    print node.xpath("@class").extract()
+
+复制代码
+在 XML 响应上的选择器样例
+
+ 这里是一些样例，用来说明一些概念。在两个例子中，我们假设已经有一个通过 XmlResponse 对象实例化的 Selector ，如下:
+
+sel = Selector(xml_response)
+
+复制代码
+
+#从 XML 响应主体中选择所有的 product 元素，返回 Selector 对象(即 SelectorList 对象)的列表:
+
+sel.xpath("//product")
+
+#从 Google Base XML feed 中提取所有的价钱，这需要注册一个命名空间:
+
+sel.register_namespace("g", "http://base.google.com/ns/1.0")
+sel.xpath("//g:price").extract()
+
+复制代码
+移除命名空间
+
+在处理爬虫项目时，完全去掉命名空间而仅仅处理元素名字，写更多简单/实用的 XPath 会方便很多。你可以为此实用 Selector.remove_namespaces() 方法。
+
+以 Github 博客的 atom 订阅来解释这个情况：
+
+$ scrapy shell https://github.com/blog.atom
+
+一旦进入 shell，我们可以尝试选择所有的 <link> 对象，可以看到没有结果（因为 Atom XML 命名空间混淆了这些节点）：
+
+>>> response.xpath("//link")
+[]
+
+但一旦调用 Selector.remove_namespaces() 方法，所有节点都可以直接通过他们的名字来访问：
+
+>>> response.selector.remove_namespaces()
+>>> response.xpath("//link")
+[<Selector xpath='//link' data=u'<link xmlns="http://www.w3.org/2005/Atom'>,
+ <Selector xpath='//link' data=u'<link xmlns="http://www.w3.org/2005/Atom'>,
+ ...
+
+如果你对为什么命名空间移除操作并不总是被调用，而需要手动调用有疑惑。这是因为存在如下两个原因，按照相关顺序如下：
+
+    移除命名空间需要迭代并修改文件的所有节点，而这对于 Scrapy 爬取的所有文档操作需要一定的性能消耗
+    会存在这样的情况，确实需要使用命名空间，但有些元素的名字与命名空间冲突。尽管这些情况非常少见。
+
+十、urllib
+什么是Urllib
+
+Urllib是python内置的HTTP请求库
+包括以下模块
+urllib.request 请求模块
+urllib.error 异常处理模块
+urllib.parse url解析模块
+urllib.robotparser robots.txt解析模块
+urlopen
+
+关于urllib.request.urlopen参数的介绍：
+urllib.request.urlopen(url, data=None, [timeout, ]*, cafile=None, capath=None, cadefault=False, context=None)
+
+url参数的使用
+
+先写一个简单的例子：
+
+import urllib.request
+
+response = urllib.request.urlopen('http://www.baidu.com')
+print(response.read().decode('utf-8'))
+
+urlopen一般常用的有三个参数，它的参数如下：
+urllib.requeset.urlopen(url,data,timeout)
+response.read()可以获取到网页的内容，如果没有read()，将返回如下内容
+
+data参数的使用
+
+上述的例子是通过请求百度的get请求获得百度，下面使用urllib的post请求
+这里通过http://httpbin.org/post网站演示（该网站可以作为练习使用urllib的一个站点使用，可以
+模拟各种请求操作）。
+复制代码
+
+import urllib.parse
+import urllib.request
+
+data = bytes(urllib.parse.urlencode({'word': 'hello'}), encoding='utf8')
+print(data)
+response = urllib.request.urlopen('http://httpbin.org/post', data=data)
+print(response.read())
+
+复制代码
+
+这里就用到urllib.parse，通过bytes(urllib.parse.urlencode())可以将post数据进行转换放到urllib.request.urlopen的data参数中。这样就完成了一次post请求。
+所以如果我们添加data参数的时候就是以post请求方式请求，如果没有data参数就是get请求方式
+
+timeout参数的使用
+在某些网络情况不好或者服务器端异常的情况会出现请求慢的情况，或者请求异常，所以这个时候我们需要给
+请求设置一个超时时间，而不是让程序一直在等待结果。例子如下：
+
+import urllib.request
+
+response = urllib.request.urlopen('http://httpbin.org/get', timeout=1)
+print(response.read())
+
+运行之后我们看到可以正常的返回结果，接着我们将timeout时间设置为0.1
+运行程序会提示如下错误
+
+所以我们需要对异常进行抓取，代码更改为
+复制代码
+
+import socket
+import urllib.request
+import urllib.error
+
+try:
+    response = urllib.request.urlopen('http://httpbin.org/get', timeout=0.1)
+except urllib.error.URLError as e:
+    if isinstance(e.reason, socket.timeout):
+        print('TIME OUT')
+
+复制代码
+响应
+
+响应类型、状态码、响应头
+
+import urllib.request
+
+response = urllib.request.urlopen('https://www.python.org')
+print(type(response))
+
+可以看到结果为：<class 'http.client.httpresponse'="">
+我们可以通过response.status、response.getheaders().response.getheader("server")，获取状态码以及头部信息
+response.read()获得的是响应体的内容
+
+当然上述的urlopen只能用于一些简单的请求，因为它无法添加一些header信息，如果后面写爬虫我们可以知道，很多情况下我们是需要添加头部信息去访问目标站的，这个时候就用到了urllib.request
+request
+
+设置Headers
+有很多网站为了防止程序爬虫爬网站造成网站瘫痪，会需要携带一些headers头部信息才能访问，最长见的有user-agent参数
+
+写一个简单的例子：
+
+import urllib.request
+
+request = urllib.request.Request('https://python.org')
+response = urllib.request.urlopen(request)
+print(response.read().decode('utf-8'))
+
+给请求添加头部信息，从而定制自己请求网站是时的头部信息
+复制代码
+
+from urllib import request, parse
+
+url = 'http://httpbin.org/post'
+headers = {
+    'User-Agent': 'Mozilla/4.0 (compatible; MSIE 5.5; Windows NT)',
+    'Host': 'httpbin.org'
+}
+dict = {
+    'name': 'zhaofan'
+}
+data = bytes(parse.urlencode(dict), encoding='utf8')
+req = request.Request(url=url, data=data, headers=headers, method='POST')
+response = request.urlopen(req)
+print(response.read().decode('utf-8'))
+
+复制代码
+
+添加请求头的第二种方式
+复制代码
+
+from urllib import request, parse
+
+url = 'http://httpbin.org/post'
+dict = {
+    'name': 'Germey'
+}
+data = bytes(parse.urlencode(dict), encoding='utf8')
+req = request.Request(url=url, data=data, method='POST')
+req.add_header('User-Agent', 'Mozilla/4.0 (compatible; MSIE 5.5; Windows NT)')
+response = request.urlopen(req)
+print(response.read().decode('utf-8'))
+
+复制代码
+
+这种添加方式有个好处是自己可以定义一个请求头字典，然后循环进行添加
+
+高级用法各种handler
+
+代理,ProxyHandler
+
+通过rulllib.request.ProxyHandler()可以设置代理,网站它会检测某一段时间某个IP 的访问次数，如果访问次数过多，它会禁止你的访问,所以这个时候需要通过设置代理来爬取数据
+复制代码
+
+import urllib.request
+
+proxy_handler = urllib.request.ProxyHandler({
+    'http': 'http://127.0.0.1:9743',
+    'https': 'https://127.0.0.1:9743'
+})
+opener = urllib.request.build_opener(proxy_handler)
+response = opener.open('http://httpbin.org/get')
+print(response.read())
+
+复制代码
+
+cookie,HTTPCookiProcessor
+
+cookie中保存中我们常见的登录信息，有时候爬取网站需要携带cookie信息访问,这里用到了http.cookijar，用于获取cookie以及存储cookie
+复制代码
+
+import http.cookiejar, urllib.request
+cookie = http.cookiejar.CookieJar()
+handler = urllib.request.HTTPCookieProcessor(cookie)
+opener = urllib.request.build_opener(handler)
+response = opener.open('http://www.baidu.com')
+for item in cookie:
+    print(item.name+"="+item.value)
+
+复制代码
+
+同时cookie可以写入到文件中保存，有两种方式http.cookiejar.MozillaCookieJar和http.cookiejar.LWPCookieJar()，当然你自己用哪种方式都可以
+
+具体代码例子如下：
+http.cookiejar.MozillaCookieJar()方式
+复制代码
+
+import http.cookiejar, urllib.request
+filename = "cookie.txt"
+cookie = http.cookiejar.MozillaCookieJar(filename)
+handler = urllib.request.HTTPCookieProcessor(cookie)
+opener = urllib.request.build_opener(handler)
+response = opener.open('http://www.baidu.com')
+cookie.save(ignore_discard=True, ignore_expires=True)
+
+复制代码
+
+http.cookiejar.LWPCookieJar()方式
+复制代码
+
+import http.cookiejar, urllib.request
+filename = 'cookie.txt'
+cookie = http.cookiejar.LWPCookieJar(filename)
+handler = urllib.request.HTTPCookieProcessor(cookie)
+opener = urllib.request.build_opener(handler)
+response = opener.open('http://www.baidu.com')
+cookie.save(ignore_discard=True, ignore_expires=True)
+
+复制代码
+
+同样的如果想要通过获取文件中的cookie获取的话可以通过load方式，当然用哪种方式写入的，就用哪种方式读取。
+复制代码
+
+import http.cookiejar, urllib.request
+cookie = http.cookiejar.LWPCookieJar()
+cookie.load('cookie.txt', ignore_discard=True, ignore_expires=True)
+handler = urllib.request.HTTPCookieProcessor(cookie)
+opener = urllib.request.build_opener(handler)
+response = opener.open('http://www.baidu.com')
+print(response.read().decode('utf-8'))
+
+复制代码
+异常处理
+
+在很多时候我们通过程序访问页面的时候，有的页面可能会出现错误，类似404，500等错误
+这个时候就需要我们捕捉异常，下面先写一个简单的例子
+复制代码
+
+from urllib import request,error
+
+try:
+    response = request.urlopen("http://pythonsite.com/1111.html")
+except error.URLError as e:
+    print(e.reason)
+
+复制代码
+
+上述代码访问的是一个不存在的页面，通过捕捉异常，我们可以打印异常错误
+
+这里我们需要知道的是在urllb异常这里有两个个异常错误：
+URLError,HTTPError，HTTPError是URLError的子类
+
+URLError里只有一个属性：reason,即抓异常的时候只能打印错误信息，类似上面的例子
+
+HTTPError里有三个属性：code,reason,headers，即抓异常的时候可以获得code,reson，headers三个信息，例子如下：
+复制代码
+
+from urllib import request,error
+try:
+    response = request.urlopen("http://pythonsite.com/1111.html")
+except error.HTTPError as e:
+    print(e.reason)
+    print(e.code)
+    print(e.headers)
+except error.URLError as e:
+    print(e.reason)
+
+else:
+    print("reqeust successfully")
+
+复制代码
+
+同时，e.reason其实也可以在做深入的判断，例子如下：
+复制代码
+
+import socket
+
+from urllib import error,request
+
+try:
+    response = request.urlopen("http://www.pythonsite.com/",timeout=0.001)
+except error.URLError as e:
+    print(type(e.reason))
+    if isinstance(e.reason,socket.timeout):
+        print("time out")
+
+复制代码
+URL解析
+
+urlparse
+The URL parsing functions focus on splitting a URL string into its components, or on combining URL components into a URL string.
+
+urllib.parse.urlparse(urlstring, scheme='', allow_fragments=True)
+
+功能一：
+
+from urllib.parse import urlparse
+
+result = urlparse("http://www.baidu.com/index.html;user?id=5#comment")
+print(result)
+
+结果为：
+
+这里就是可以对你传入的url地址进行拆分
+同时我们是可以指定协议类型：
+result = urlparse("www.baidu.com/index.html;user?id=5#comment",scheme="https")
+这样拆分的时候协议类型部分就会是你指定的部分，当然如果你的url里面已经带了协议，你再通过scheme指定的协议就不会生效
+
+urlunpars
+
+其实功能和urlparse的功能相反，它是用于拼接，例子如下：
+
+from urllib.parse import urlunparse
+
+data = ['http','www.baidu.com','index.html','user','a=123','commit']
+print(urlunparse(data))
+
+结果如下
+
+urljoin
+
+这个的功能其实是做拼接的，例子如下：
+复制代码
+
+from urllib.parse import urljoin
+
+print(urljoin('http://www.baidu.com', 'FAQ.html'))
+print(urljoin('http://www.baidu.com', 'https://pythonsite.com/FAQ.html'))
+print(urljoin('http://www.baidu.com/about.html', 'https://pythonsite.com/FAQ.html'))
+print(urljoin('http://www.baidu.com/about.html', 'https://pythonsite.com/FAQ.html?question=2'))
+print(urljoin('http://www.baidu.com?wd=abc', 'https://pythonsite.com/index.php'))
+print(urljoin('http://www.baidu.com', '?category=2#comment'))
+print(urljoin('www.baidu.com', '?category=2#comment'))
+print(urljoin('www.baidu.com#comment', '?category=2'))
+
+复制代码
+
+结果为：
+
+从拼接的结果我们可以看出，拼接的时候后面的优先级高于前面的url
+
+urlencode
+这个方法可以将字典转换为url参数，例子如下
+复制代码
+
+from urllib.parse import urlencode
+
+params = {
+    "name":"zhaofan",
+    "age":23,
+}
+base_url = "http://www.baidu.com?"
+
+url = base_url+urlencode(params)
+print(url)
+
+
+
+十一、会话机制
+会话对象requests.Session能够跨请求地保持某些参数，比如cookies，即在同一个Session实例发出的所有请求都保持同一个cookies,而requests模块每次会自动处理cookies，这样就很方便地处理登录时的cookies问题。在cookies的处理上会话对象一句话可以顶过好几句urllib模块下的操作。即相当于urllib中的：
+1
+2
+3
+4
+	
+cj = http.cookiejar.CookieJar()
+pro = urllib.request.HTTPCookieProcessor(cj)
+opener = urllib.request.build_opener(pro)
+urllib.request.install_opener(opener)
+模拟登录V站
+
+本篇文章的任务是利用request.Session模拟登录V2EX（http://www.v2ex.com/）这个网站，即V站。
+
+工具： Python 3.5，BeautifulSoup模块，requests模块，Chrome
+
+这个网站登录的时候抓到的数据如下：
+
+其中用户名(u)、密码(p)都是明文传输的，很方便。once的话从分析登录URL： http://www.v2ex.com/signin 的源文件（下图）可以看出，应该是每次登录的特有数据，我们需要提前把它抓出来再放到Form Data里面POST给网站。
+
+ 抓出来还是老方法，用BeautifulSoup神器即可。这里又学到一种抓标签里面元素的方法，比如抓上面的"value",用soup.find('input',{'name':'once'})['value']即可
+
+即抓取含有 name="once"的input标签中的value对应的值。
+
+于是构建postData,然后POST。
+
+怎么显示登录成功呢？这里通过访问 http://www.v2ex.com/settings 即可，因为这个网址没有登录是看不了的：
+
+经过上面的分析，写出源代码（参考了alexkh的代码）：
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+	
+import requests
+from bs4 import BeautifulSoup
+ 
+url = "http://www.v2ex.com/signin"
+UA = "Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/49.0.2623.13 Safari/537.36"
+ 
+header = { "User-Agent" : UA,
+           "Referer": "http://www.v2ex.com/signin"
+           }
+ 
+v2ex_session = requests.Session()
+f = v2ex_session.get(url,headers=header)
+ 
+soup = BeautifulSoup(f.content,"html.parser")
+once = soup.find('input',{'name':'once'})['value']
+print(once)
+ 
+postData = { 'u': 'whatbeg',
+             'p': '*****',
+             'once': once,
+             'next': '/'
+             }
+ 
+v2ex_session.post(url,
+                  data = postData,
+                  headers = header)
+ 
+f = v2ex_session.get('http://www.v2ex.com/settings',headers=header)
+print(f.content.decode())
+
+然后运行发现成功登录：
+
+上面趴下来的网页源代码即为http://www.v2ex.com/settings的代码。这里once为91279.
+
+至此，登录成功。
+
+十二、选择器比较
+
+分析目标数据，选择情况如下： （1）特征明显：正则表达式 （2）类、id唯一性强：选择css （3）层次结构明显：选择xpath
+正则表达式（特殊字符）
+?
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+	
+^                            开头  '^b.*'----以b开头的任意字符
+ 
+$&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 结尾&nbsp; </code><code class="python string">'^b.*3$'----以b开头，3结尾的任意字符　　
+ 
+*                            任意长度（次数），≥0
+ 
+?                            非贪婪模式，非贪婪模式尽可能少的匹配所搜索的字符串  '.*?(b.*?b).*'----从左至右第一个b和的二个b之间的内容（包含b）
+ 
++                            一次或多次
+ 
+{2}                          指定出现次数2次
+ 
+{2,}                         出现次数≥2次
+ 
+{2,5}                        出现次数2≤x≤5
+ 
+|                            或   “z|food”----能匹配“z”或“food”(此处请谨慎)。“[z|f]ood”----则匹配“zood”或“food”或"zood"
+ 
+[]                           括号中任意一个符合即可（中括号里面没有分转义字符）  '[abc]ooby123'----只要开头符合[]中任意一个即可
+ 
+[^]                          只要不出现[]的即可
+ 
+[a-Z]                        从小a到大Z
+ 
+.                            任意字符
+ 
+\s                           匹配不可见字符 \n \t  '你\s好'----可以匹配‘你 好’
+ 
+\S                           匹配可见字符，即普通字符
+ 
+\w                           匹配下划线在内的任何单词字符
+ 
+\W                           和上一个相反
+ 
+[\u4E00-\u9FA5]              只能匹配汉字
+()                           要取出的信息就用括号括起来
+ 
+\d                           数字
+Xpath语法
+?
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+	
+article                      选取所有article元素的所有子节点
+ 
+/article                     选取根元素article
+ 
+article/a                    选取所有属于article的子元素的a元素
+ 
+//div                        选取所有div子元素(不论出现在文档任何地方)
+ 
+article//div                 选取所有属于article元素的后代的div元素不管它出现在article之下的任何位置
+ 
+//@class                     选取所有名为class的属性
+ 
+/article/div[1]              选取属于srticle子元素的第一个div所有子节点
+ 
+/article/div[last()]         选取属于article子元素的最后一个div所有子节点
+ 
+/article/div[last()-1]       选取属于article子元素的倒数第二个div所有子节点
+ 
+//div[@lang]                 选取所有拥有lang属性的div元素
+ 
+//div[@lang='eng']           选取所有lang属性为eng的div元素
+ 
+/div/*                       选取属于div元素的所有子节点
+ 
+//*                          选取所有元素
+ 
+//div[@*]                    选取所有带属性的div元素
+ 
+//div/a | //div/p            选取所有div元素的a个p元素
+ 
+//span | //ul                选取文档中的span和ul元素
+ 
+article/div/p | //span       选取所有属于article元素的div元素和所有的span元素
+CSS选择器
+?
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+	
+*                            选取所有节点
+ 
+#container                   选取id为container的节点
+ 
+.container                   选取所有class包含container的节点
+ 
+li a                         选取所有li下的所有a节点
+ 
+ul+p                         选取ul后面的第一个p元素
+ 
+div#container > ul           选取id为container的div的第一个ul子元素
+ 
+ul ~ p                       选取与ul相邻的所有p元素
+ 
+a[title]                     选取所有有title属性的a元素
+ 
+a[href="http://jobbole.com"] 选取所有href属性为jobbole.com
+ 
+a[href*="jobole"]            选取所有href属性包含jobbole的a元素
+ 
+a[href^="http"]              选取所有href属性值以http开头的a元素
+ 
+a[href$=".jpg"]              选取所有href属性值以.jpg结尾的a元素
+ 
+input[type=radio]:checked    选取选中的radio的元素
+ 
+div:not(#container)          选取所有id非container的div元素
+ 
+li:nth-child(3)              选取第三个li元素
+ 
+tr:nth-child(2n)             第偶数个tr元素
+
+
+十三、pyquery
+安装
+
+有这等神器还不赶紧安装了！来！
+
+pip install pyquery
+
+还是原来的配方，还是熟悉的味道。
+参考来源
+
+本文内容参考官方文档，更多内容，大家可以去官方文档学习，毕竟那里才是最原汁原味的。
+
+目前版本 1.2.4 (2016/3/24)
+
+官方文档
+简介
+
+    pyquery allows you to make jquery queries on xml documents. The API is as much as possible the similar to jquery. pyquery uses lxml for fast xml and html manipulation.
+
+    This is not (or at least not yet) a library to produce or interact with javascript code. I just liked the jquery API and I missed it in python so I told myself “Hey let’s make jquery in python”. This is the result.
+
+    It can be used for many purposes, one idea that I might try in the future is to use it for templating with pure http templates that you modify using pyquery. I can also be used for web scrapping or for theming applications with Deliverance.
+
+pyquery 可让你用 jQuery 的语法来对 xml 进行操作。这I和 jQuery 十分类似。如果利用 lxml，pyquery 对 xml 和 html 的处理将更快。
+
+这个库不是（至少还不是）一个可以和 JavaScript交互的代码库，它只是非常像 jQuery API 而已。
+初始化
+
+在这里介绍四种初始化方式。
+
+（1）直接字符串
+
+from pyquery import PyQuery as pq
+doc = pq("<html></html>")
+
+pq 参数可以直接传入 HTML 代码，doc 现在就相当于 jQuery 里面的 $ 符号了。
+
+（2）lxml.etree
+
+from lxml import etree
+doc = pq(etree.fromstring("<html></html>"))
+
+可以首先用 lxml 的 etree 处理一下代码，这样如果你的 HTML 代码出现一些不完整或者疏漏，都会自动转化为完整清晰结构的 HTML代码。
+
+（3）直接传URL
+
+from pyquery import PyQuery as pq
+doc = pq('http://www.baidu.com')
+
+这里就像直接请求了一个网页一样，类似用 urllib2 来直接请求这个链接，得到 HTML 代码。
+
+（4）传文件
+
+from pyquery import PyQuery as pq
+doc = pq(filename='hello.html')
+
+可以直接传某个路径的文件名。
+快速体验
+
+现在我们以本地文件为例，传入一个名字为 hello.html 的文件，文件内容为
+
+<div>
+<ul>
+<li class="item-0">first item</li>
+<li class="item-1"><a href="https://ask.hellobi.com/link2.html">second item</a></li>
+<li class="item-0 active"><a href="https://ask.hellobi.com/link3.html"><span class="bold">third item</span></a></li>
+<li class="item-1 active"><a href="https://ask.hellobi.com/link4.html">fourth item</a></li>
+<li class="item-0"><a href="https://ask.hellobi.com/link5.html">fifth item</a></li>
+</ul>
+</div>
+
+编写如下程序
+
+from pyquery import PyQuery as pq
+doc = pq(filename='hello.html')
+print doc.html()
+print type(doc)
+li = doc('li')
+print type(li)
+print li.text()
+
+运行结果
+
+    <ul>
+<li class="item-0">first item</li>
+<li class="item-1"><a href="https://ask.hellobi.com/link2.html">second item</a></li>
+<li class="item-0 active"><a href="https://ask.hellobi.com/link3.html"><span class="bold">third item</span></a></li>
+<li class="item-1 active"><a href="https://ask.hellobi.com/link4.html">fourth item</a></li>
+<li class="item-0"><a href="https://ask.hellobi.com/link5.html">fifth item</a></li>
+</ul>
+
+<class 'pyquery.pyquery.PyQuery'>
+<class 'pyquery.pyquery.PyQuery'>
+first item second item third item fourth item fifth item
+
+看，回忆一下 jQuery 的语法，是不是运行结果都是一样的呢？
+
+在这里我们注意到了一点，PyQuery 初始化之后，返回类型是 PyQuery，利用了选择器筛选一次之后，返回结果的类型依然还是 PyQuery，这简直和 jQuery 如出一辙，不能更赞！然而想一下 BeautifulSoup 和 XPath 返回的是什么？列表！一种不能再进行二次筛选（在这里指依然利用 BeautifulSoup 或者 XPath 语法）的对象！
+
+然而比比 PyQuery，哦我简直太爱它了！
+属性操作
+
+你可以完全按照 jQuery 的语法来进行 PyQuery 的操作。
+
+from pyquery import PyQuery as pq
+
+p = pq('<p id="hello" class="hello"></p>')('p')
+print p.attr("id")
+print p.attr("id", "plop")
+print p.attr("id", "hello")
+
+运行结果
+
+hello
+<p id="plop" class="hello"/>
+<p id="hello" class="hello"/>
+
+再来一发
+
+from pyquery import PyQuery as pq
+
+p = pq('<p id="hello" class="hello"></p>')('p')
+print p.addClass('beauty')
+print p.removeClass('hello')
+print p.css('font-size', '16px')
+print p.css({'background-color': 'yellow'})
+
+依旧是那么优雅与自信！
+
+在这里我们发现了，这是一连串的操作，而 p 是一直在原来的结果上变化的。
+
+因此执行上述操作之后，p 本身也发生了变化。
+DOM操作
+
+同样的原汁原味的 jQuery 语法
+
+from pyquery import PyQuery as pq
+
+p = pq('<p id="hello" class="hello"></p>')('p')
+print p.append(' check out <a href="http://reddit.com/r/python"><span>reddit</span></a>')
+print p.prepend('Oh yes!')
+d = pq('<div class="wrap"><div id="test"><a href="http://cuiqingcai.com">Germy</a></div></div>')
+p.prependTo(d('#test'))
+print p
+print d
+d.empty()
+print d
+
+运行结果
+
+<p id="hello" class="hello"> check out <a href="http://reddit.com/r/python"><span>reddit</span></a></p>
+<p id="hello" class="hello">Oh yes! check out <a href="http://reddit.com/r/python"><span>reddit</span></a></p>
+<p id="hello" class="hello">Oh yes! check out <a href="http://reddit.com/r/python"><span>reddit</span></a></p>
+<div class="wrap"><div id="test"><p id="hello" class="hello">Oh yes! check out <a href="http://reddit.com/r/python"><span>reddit</span></a></p><a href="http://cuiqingcai.com">Germy</a></div></div>
+<div class="wrap"/>
+
+这不需要多解释了吧。
+
+DOM 操作也是与 jQuery 如出一辙。
+遍历
+
+遍历用到 items 方法返回对象列表，或者用 lambda
+
+from pyquery import PyQuery as pq
+doc = pq(filename='hello.html')
+lis = doc('li')
+for li in lis.items():
+    print li.html()
+print lis.each(lambda e: e)
+
+运行结果
+
+first item
+<a href="https://ask.hellobi.com/link2.html">second item</a>
+<a href="https://ask.hellobi.com/link3.html"><span class="bold">third item</span></a>
+<a href="https://ask.hellobi.com/link4.html">fourth item</a>
+<a href="https://ask.hellobi.com/link5.html">fifth item</a>
+<li class="item-0">first item</li>
+ <li class="item-1"><a href="https://ask.hellobi.com/link2.html">second item</a></li>
+ <li class="item-0 active"><a href="https://ask.hellobi.com/link3.html"><span class="bold">third item</span></a></li>
+ <li class="item-1 active"><a href="https://ask.hellobi.com/link4.html">fourth item</a></li>
+ <li class="item-0"><a href="https://ask.hellobi.com/link5.html">fifth item</a></li>
+
+不过最常用的还是 items 方法
+网页请求
+
+PyQuery 本身还有网页请求功能，而且会把请求下来的网页代码转为 PyQuery 对象。
+
+from pyquery import PyQuery as pq
+print pq('http://cuiqingcai.com/', headers={'user-agent': 'pyquery'})
+print pq('http://httpbin.org/post', {'foo': 'bar'}, method='post', verify=True)
+
+感受一下，GET，POST，样样通。
+Ajax
+
+PyQuery 同样支持 Ajax 操作，带有 get 和 post 方法，不过不常用，一般我们不会用 PyQuery 来做网络请求，仅仅是用来解析。
+
+PyQueryAjax
+API
+
+最后少不了的，API大放送。
+
+API
+
+原汁原味最全的API，都在里面了！如果你对 jQuery 语法不熟，强烈建议先学习下 jQuery，再回来看 PyQuery，你会感到异常亲切！
+
+
+
